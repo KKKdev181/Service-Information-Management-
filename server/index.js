@@ -5,14 +5,14 @@ import { list, upsert, remove, workbookPath, previewWorkbook, importRecords } fr
 
 const app = express();
 app.disable('x-powered-by');
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '10mb' }));
 app.use((req, res, next) => { res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Referrer-Policy', 'no-referrer'); next(); });
 app.get('/api/services', asyncRoute(async (req, res) => res.json(await list())));
 app.post('/api/services', asyncRoute(async (req, res) => res.status(201).json(await upsert(null, req.body))));
 app.put('/api/services/:id', asyncRoute(async (req, res) => res.json(await upsert(req.params.id, req.body))));
 app.delete('/api/services/:id', asyncRoute(async (req, res) => { await remove(req.params.id); res.status(204).end(); }));
 app.get('/api/export', asyncRoute(async (req, res) => res.download(await workbookPath(), 'service-implementation.xlsx')));
-app.post('/api/import/preview', express.raw({ type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', limit: '12mb' }), asyncRoute(async (req, res) => res.json(await previewWorkbook(req.body))));
+app.post('/api/import/preview', express.raw({ type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', limit: '12mb' }), asyncRoute(async (req, res) => res.json(await previewWorkbook(req.body, decodeURIComponent(req.get('X-Import-Filename') || '')))));
 app.post('/api/import/commit', asyncRoute(async (req, res) => res.json(await importRecords(req.body.records))));
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public');
 app.use(express.static(publicDir));
