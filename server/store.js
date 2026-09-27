@@ -110,3 +110,42 @@ export const remove = id => serialize(async () => {
   for (const name of children) rewrite(book, name, rows(book, name).filter(item => item.serviceId !== id));
   await save(book);
 });
+
+export async function previewWorkbook(buffer) {
+  const book = new ExcelJS.Workbook();
+  try { await book.xlsx.load(buffer); }
+  catch { throw Object.assign(new Error('تعذر قراءة الملف. اختر ملف Excel بصيغة xlsx.'), { status: 400 }); }
+  for (const [name, columns] of Object.entries(sheets)) {
+    const sheet = book.getWorksheet(name);
+    if (!sheet || columns.some((column, i) => sheet.getRow(1).getCell(i + 1).text !== column))
+      throw Object.assign(new Error('تنسيق الملف مختلف عن نموذج تصدير الموقع. نحتاج مثالًا من ملفاتك القديمة لإعداد تحويلها.'), { status: 400 });
+  }
+  const records = snapshot(book);
+  if (records.length > 1000) throw Object.assign(new Error('الملف يحتوي على أكثر من 1000 خدمة. قسّمه إلى ملفات أصغر.'), { status: 400 });
+  return records.map(item => ({ ...item, service: Object.fromEntries(sheets.Services.map(k => [k, item.service[k]])) }));
+}
+
+export const importRecords = items => serialize(async () => {
+  if (!Array.isArray(items) || items.length > 1000) throw Object.assign(new Error('عدد الخدمات غير صحيح'), { status: 400 });
+  const book = await readBook();
+  const current = Object.fromEntries(Object.keys(sheets).map(name => [name, rows(book, name)]));
+  const known = new Set(current.Services.map(s => `${safe(s.code).toLowerCase()}|${safe(s.name).toLowerCase()}`));
+  let imported = 0, skipped = 0;
+  for (const item of items) {
+    validate(item);
+    const name = safe(item.service.name), code = safe(item.service.code);
+    const identity = `${code.toLowerCase()}|${name.toLowerCase()}`;
+    if (known.has(identity)) { skipped++; continue; }
+    const id = crypto.randomUUID();
+    current.Services.push({ ...Object.fromEntries(sheets.Services.map(key => [key, safe(item.service[key])])), id, name, code, updatedAt: new Date().toISOString(), updatedBy: 'استيراد Excel', revision: '1' });
+    for (const section of children) {
+      for (const row of item[section]) current[section].push({ ...Object.fromEntries(sheets[section].map(key => [key, safe(row[key])])), id: crypto.randomUUID(), serviceId: id });
+    }
+    known.add(identity); imported++;
+  }
+  if (imported) {
+    for (const section of Object.keys(sheets)) rewrite(book, section, current[section]);
+    await save(book);
+  }
+  return { imported, skipped };
+});
