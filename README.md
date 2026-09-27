@@ -32,3 +32,9 @@ Environment: `PORT` (default 3000), `HOST` (default 127.0.0.1), `DATA_DIR` (defa
 - `Connections`: NAT, GSN, Site-to-Site VPN or other connections with source, destination, port and ticket reference.
 
 The update API checks revisions to prevent accidentally overwriting a newer service edit. Writes are serialized within the process and the workbook is replaced atomically. Excel is the primary data file, not a database server. Importing legacy workbooks requires field mapping and validation; this first version provides export and manual entry.
+
+## Importing existing Excel files
+
+Choose **استيراد Excel** and select one or more `.xlsx` files. The portal first previews the services and shows any files whose format is not recognized. Review the list and click **استيراد الخدمات** to save. Matching service name + code pairs are skipped, so re-importing the same file does not duplicate them. Imports are saved to the server workbook, not to OneDrive.
+
+This first importer recognizes workbooks exported from this portal (sheets `Services`, `Servers`, `Endpoints`, `LoadBalancers`, `Connections`). Existing Implementation Sheet files with different headers or layouts need a mapping. Provide one representative **redacted** workbook so its server, URL, IP and network fields can be mapped and tested before importing the whole OneDrive folder. Download or sync the files from OneDrive locally, then choose them in the browser; the application has no direct OneDrive authorization.
