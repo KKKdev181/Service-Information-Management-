@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#123d37" />
+  <title>Service Atlas | سجل الخدمات</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="#/" aria-label="الصفحة الرئيسية"><span class="brand-mark">✳</span><span><strong>Service Atlas</strong><small>سجل معلومات الخدمات</small></span></a>
+      <div class="side-label">مساحة العمل</div>
+      <nav class="side-nav"><a class="active" href="#/" id="nav-services"><span class="nav-icon">▦</span> جميع الخدمات <span class="nav-count" id="nav-count">0</span></a></nav>
+      <div class="sidebar-bottom"><div class="side-help"><span class="help-icon">◈</span><strong>كل تفاصيل الخدمة في مكان واحد</strong><p>السيرفرات، الروابط، النشر، والاتصالات مرتبطة بسجل الخدمة.</p></div><div class="side-foot">INTERNAL SERVICE RECORDS <span>•</span> v1.0</div></div>
+    </aside>
+    <div class="main-wrap">
+      <header class="topbar"><div class="breadcrumbs"><span>مساحة العمل</span><span class="crumb-sep">/</span><strong id="breadcrumb">الخدمات</strong></div><div class="top-actions"><span class="live-dot"></span><span>بوابة داخلية</span><div class="avatar" title="فريق التقنية">IT</div></div></header>
+      <main id="app"></main>
+    </div>
+  </div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
