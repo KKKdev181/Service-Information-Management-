@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { list, upsert, remove, workbookPath } from './store.js';
+import { list, upsert, remove, workbookPath, previewWorkbook, importRecords } from './store.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -12,6 +12,8 @@ app.post('/api/services', asyncRoute(async (req, res) => res.status(201).json(aw
 app.put('/api/services/:id', asyncRoute(async (req, res) => res.json(await upsert(req.params.id, req.body))));
 app.delete('/api/services/:id', asyncRoute(async (req, res) => { await remove(req.params.id); res.status(204).end(); }));
 app.get('/api/export', asyncRoute(async (req, res) => res.download(await workbookPath(), 'service-implementation.xlsx')));
+app.post('/api/import/preview', express.raw({ type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', limit: '12mb' }), asyncRoute(async (req, res) => res.json(await previewWorkbook(req.body))));
+app.post('/api/import/commit', asyncRoute(async (req, res) => res.json(await importRecords(req.body.records))));
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public');
 app.use(express.static(publicDir));
 app.get('/{*path}', (req, res) => res.sendFile(path.join(publicDir, 'index.html')));
