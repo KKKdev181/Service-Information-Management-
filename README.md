@@ -42,3 +42,7 @@ This first importer recognizes workbooks exported from this portal (sheets `Serv
 ### Implementation Sheet template mapping
 
 The importer also recognizes the supplied `Implementation details_Template v1.0 New.xlsx` layout, reading the project name, server inventory (including CPU, RAM, domain and storage), publishing endpoints, load balancer rows, subnet/VLAN rows, application and standard communication matrix rows, and populated NAT rows. Example rows and empty template cells are ignored. The source workbook remains in OneDrive; the application imports selected structured fields into its own server workbook. Sheets such as checklist, design, software/hardware assets, physical connectivity and storage inventory are not yet modeled or imported. Other versions of the template may need adjusted mapping; review the preview before committing any batch.
+
+## Impact analysis and record checks
+
+Open **تحليل الأثر وجودة البيانات** to search an IP, server name, URL, VIP or service name. The page shows matching assets and network flows, and brings in flows from other service records when they explicitly contain the same server IP. It flags missing owner/CODE/server/endpoint fields and duplicate server IPs across services for review. The analysis is derived from the local Excel workbook each time data is loaded; it makes no live calls to F5, firewall, CMDB, DNS or OneDrive and cannot prove actual network reachability. Verify proposed changes against those systems before implementation.
