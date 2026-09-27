@@ -62,14 +62,14 @@ export async function parseImplementationSheet(book, filename='') {
   for(let r=urlHeader+1;urlHeader && r<=Math.min(urlHeader+3,detail.rowCount);r++){
     const env=val(detail,r,5),url=val(detail,r,6),publicIp=val(detail,r,8),waf=val(detail,r,9),vip=val(detail,r,10),port=val(detail,r,11);
     if(!/^(Production|Staging|Dev|QA)$/i.test(env) || ![url,publicIp,waf,vip,port].some(Boolean)) continue;
-    record.Endpoints.push({url,dns:url,vip,port,protocol:url.startsWith('https')?'HTTPS':'',environment:env,notes:pair(publicIp&&`Public IP: ${publicIp}`,waf&&`WAF IP: ${waf}`)});
+    record.Endpoints.push({url,dns:url,vip,port,protocol:url.startsWith('https')?'HTTPS':'',environment:env,publicIp,wafIp:waf,notes:''});
   }
   const lbHeader=rowWith(detail,'Host Name',5,100);
   for(let r=lbHeader+1;lbHeader && r<=Math.min(lbHeader+30,detail.rowCount);r++){
     if(has(detail,r,5,'Cluster IP')) break;
     const host=val(detail,r,5),vip=val(detail,r,10);
     if(!host || !vip) continue;
-    addUnique(record.LoadBalancers,{name:host,vip,pool:val(detail,r,13),members:val(detail,r,6),port:val(detail,r,12),waf:'',notes:pair(val(detail,r,7)&&`Host Port: ${val(detail,r,7)}`,val(detail,r,8)&&`Host Protocol: ${val(detail,r,8)}`,val(detail,r,9)&&`Type: ${val(detail,r,9)}`,val(detail,r,11)&&`VIP Protocol: ${val(detail,r,11)}`,val(detail,r,14)&&`Certificate/Content Switching: ${val(detail,r,14)}`)},x=>`${x.name}|${x.vip}`);
+    addUnique(record.LoadBalancers,{name:host,vip,pool:val(detail,r,13),members:val(detail,r,6),port:val(detail,r,12),waf:'',hostIp:val(detail,r,6),hostPort:val(detail,r,7),hostProtocol:val(detail,r,8),vipProtocol:val(detail,r,11),publishType:val(detail,r,9),certificate:val(detail,r,14),notes:''},x=>`${x.name}|${x.vip}`);
   }
   for(const sheetName of ['APP Comm Matrix','Standard Comm Matrix']){
     const sheet=book.getWorksheet(sheetName);if(!sheet)continue;
@@ -78,7 +78,7 @@ export async function parseImplementationSheet(book, filename='') {
       const destination=pair(val(sheet,r,5),val(sheet,r,6));
       const port=val(sheet,r,8),protocol=val(sheet,r,7);
       if(!source && !destination) continue;
-      record.Connections.push({type:'Firewall',source,destination,port:pair(protocol,port),reference:sheetName,notes:pair(val(sheet,r,9),val(sheet,r,10))});
+      record.Connections.push({type:'Firewall',source,destination,sourceIp:val(sheet,r,3),sourceHost:val(sheet,r,4),destinationIp:val(sheet,r,5),destinationHost:val(sheet,r,6),protocol,port,reference:sheetName,duration:val(sheet,r,9),notes:val(sheet,r,10)});
     }
   }
   const nat=book.getWorksheet('NATTING');
@@ -86,7 +86,7 @@ export async function parseImplementationSheet(book, filename='') {
     for(let r=from;r<=to;r++){
       const env=val(nat,r,2),source=val(nat,r,3),snat=val(nat,r,4),port=val(nat,r,5),dnat=val(nat,r,6),lb=val(nat,r,7),lbPorts=val(nat,r,8),destination=val(nat,r,9);
       if(![source,snat,port,dnat,lb,lbPorts,destination].some(Boolean))continue;
-      record.Connections.push({type:'NAT',source:pair(source,snat&&`SNAT ${snat}`),destination:pair(destination,dnat&&`DNAT ${dnat}`),port:pair(port,lbPorts&&`LB ${lbPorts}`),reference:pair('NATTING',env,direction),notes:lb&&`LB: ${lb}`});
+      record.Connections.push({type:'NAT',source:pair(source,snat&&`SNAT ${snat}`),destination:pair(destination,dnat&&`DNAT ${dnat}`),sourceHost:source,sourceIp:snat,destinationHost:destination,destinationIp:dnat,protocol:'',port:pair(port,lbPorts&&`LB ${lbPorts}`),reference:pair('NATTING',env,direction),notes:lb&&`LB: ${lb}`});
     }
   }}
   return record;
