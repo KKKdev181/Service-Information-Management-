@@ -2,17 +2,19 @@ import ExcelJS from 'exceljs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { readLegacyBuffer } from './legacy.js';
 
 const directory = path.resolve(process.env.DATA_DIR || './data');
 const file = path.join(directory, 'services.xlsx');
 const sheets = {
   Services: ['id', 'name', 'code', 'customer', 'owner', 'status', 'environment', 'description', 'updatedAt', 'updatedBy', 'revision'],
-  Servers: ['id', 'serviceId', 'name', 'environment', 'role', 'privateIp', 'publicIp', 'os', 'site', 'notes'],
+  Servers: ['id', 'serviceId', 'name', 'environment', 'role', 'privateIp', 'publicIp', 'os', 'site', 'domain', 'cpu', 'ram', 'storage', 'notes'],
   Endpoints: ['id', 'serviceId', 'url', 'dns', 'vip', 'port', 'protocol', 'environment', 'notes'],
   LoadBalancers: ['id', 'serviceId', 'name', 'vip', 'pool', 'members', 'port', 'waf', 'notes'],
-  Connections: ['id', 'serviceId', 'type', 'source', 'destination', 'port', 'reference', 'notes']
+  Connections: ['id', 'serviceId', 'type', 'source', 'destination', 'port', 'reference', 'notes'],
+  Networks: ['id', 'serviceId', 'name', 'ipam', 'range', 'vlan', 'subnet', 'gateway', 'context', 'notes']
 };
-const children = ['Servers', 'Endpoints', 'LoadBalancers', 'Connections'];
+const children = ['Servers', 'Endpoints', 'LoadBalancers', 'Connections', 'Networks'];
 let queue = Promise.resolve();
 const safe = value => String(value ?? '').trim().slice(0, 1000);
 const textCell = value => {
@@ -38,6 +40,15 @@ async function readBook() {
       sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
       sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF153C37' } };
       columns.forEach((_, i) => sheet.getColumn(i + 1).width = 22);
+    }
+    const sheet=book.getWorksheet(name);
+    const oldHeaders=sheet.getRow(1).values.slice(1).map(String);
+    if(columns.some((column,i)=>oldHeaders[i]!==column)) {
+      const oldRows=[];
+      sheet.eachRow((row,index)=>{if(index>1)oldRows.push(Object.fromEntries(oldHeaders.map((key,i)=>[key,row.getCell(i+1).value??''])))});
+      if(sheet.rowCount>1)sheet.spliceRows(2,sheet.rowCount-1);
+      columns.forEach((column,i)=>sheet.getRow(1).getCell(i+1).value=column);
+      for(const row of oldRows)sheet.addRow(columns.map(key=>row[key]??''));
     }
   }
   return book;
@@ -111,16 +122,24 @@ export const remove = id => serialize(async () => {
   await save(book);
 });
 
-export async function previewWorkbook(buffer) {
+export async function previewWorkbook(buffer, filename='') {
+  try { const legacy=await readLegacyBuffer(buffer,filename); if(legacy)return [legacy]; }
+  catch(error) { if(error.status)throw error; /* Some simple workbooks are unsupported by ExcelJS streaming; use regular parsing below. */ }
   const book = new ExcelJS.Workbook();
   try { await book.xlsx.load(buffer); }
   catch { throw Object.assign(new Error('تعذر قراءة الملف. اختر ملف Excel بصيغة xlsx.'), { status: 400 }); }
+  const imported={};
   for (const [name, columns] of Object.entries(sheets)) {
     const sheet = book.getWorksheet(name);
-    if (!sheet || columns.some((column, i) => sheet.getRow(1).getCell(i + 1).text !== column))
+    if(!sheet && name==='Networks'){imported[name]=[];continue;}
+    const headers=sheet && sheet.getRow(1).values.slice(1).map(String);
+    if (!sheet || !headers.includes('id') || (name!=='Services' && !headers.includes('serviceId')) || (name==='Services' && !headers.includes('name')))
       throw Object.assign(new Error('تنسيق الملف مختلف عن نموذج تصدير الموقع. نحتاج مثالًا من ملفاتك القديمة لإعداد تحويلها.'), { status: 400 });
+    const parsed=[];
+    sheet.eachRow((row,index)=>{if(index>1){const entry=Object.fromEntries(columns.map(key=>[key,headers.includes(key)?parseCell(row.getCell(headers.indexOf(key)+1).text):'']));if(entry.id)parsed.push(entry)}});
+    imported[name]=parsed;
   }
-  const records = snapshot(book);
+  const records = imported.Services.map(service=>({service,...Object.fromEntries(children.map(name=>[name,imported[name].filter(row=>row.serviceId===service.id)]))}));
   if (records.length > 1000) throw Object.assign(new Error('الملف يحتوي على أكثر من 1000 خدمة. قسّمه إلى ملفات أصغر.'), { status: 400 });
   return records.map(item => ({ ...item, service: Object.fromEntries(sheets.Services.map(k => [k, item.service[k]])) }));
 }
