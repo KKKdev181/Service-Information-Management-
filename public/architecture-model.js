@@ -1,3 +1,4 @@
+import {arrangeArchitecture} from './architecture-view.js';
 export const environments=['Production','Staging','Dev/QA','DR','غير محدد'];
 export function generateArchitecture(record){
  const nodes=[],edges=[];let seq=0;const id=()=>`generated-${++seq}`;
@@ -12,8 +13,5 @@ export function generateArchitecture(record){
    const resolve=(side)=>{const ip=flow[side+'Ip']||'',name=flow[side+'Host']||'',raw=flow[side]||'';if(!ip&&!name&&!raw)return null;return find(name,ip)||nodes.find(n=>n.label===(name||raw||ip))||add(name||raw||ip,'External',ip);};
    connect(resolve('source'),resolve('destination'),flow.type||'Connection',flow.protocol,flow.port);
  }
- const counters={};for(const n of nodes){const lane=environments.indexOf(n.environment);const index=counters[lane]||0;counters[lane]=index+1;n.x=30+(index%4)*230;n.y=lane*330+75+Math.floor(index/4)*100;}
- // Keep large groups from overlapping later environment groups.
- let y=0;for(const env of environments){const group=nodes.filter(n=>n.environment===env);for(let i=0;i<group.length;i++){group[i].x=30+(i%4)*230;group[i].y=y+65+Math.floor(i/4)*110;}y+=Math.max(210,Math.ceil(group.length/4)*110+90);}
- return {nodes,edges};
+ return arrangeArchitecture({nodes,edges});
 }
