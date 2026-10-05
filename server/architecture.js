@@ -10,7 +10,7 @@ export function validateGraph(input){
  if(!input||!Array.isArray(input.nodes)||!Array.isArray(input.edges)||input.nodes.length>500||input.edges.length>2000)throw fail('حجم أو صيغة الرسم غير صحيحة');
  const ids=new Set();
  const str=x=>String(x??'').slice(0,1000);
- const nodes=input.nodes.map(n=>{if(!n||typeof n.id!=='string'||ids.has(n.id)||!Number.isFinite(n.x)||!Number.isFinite(n.y))throw fail('عنصر غير صحيح');ids.add(n.id);return {id:str(n.id),label:str(n.label),type:str(n.type),ip:str(n.ip),environment:str(n.environment),notes:str(n.notes),x:Math.max(0,Math.min(10000,n.x)),y:Math.max(0,Math.min(10000,n.y))};});
+ const nodes=input.nodes.map(n=>{if(!n||typeof n.id!=='string'||ids.has(n.id)||!Number.isFinite(n.x)||!Number.isFinite(n.y))throw fail('عنصر غير صحيح');ids.add(n.id);return {id:str(n.id),label:str(n.label),type:str(n.type),ip:str(n.ip),environment:str(n.environment),notes:str(n.notes),zone:str(n.zone),width:Math.max(224,Math.min(700,Number(n.width)||224)),height:Math.max(116,Math.min(500,Number(n.height)||116)),x:Math.max(0,Math.min(10000,n.x)),y:Math.max(0,Math.min(10000,n.y))};});
  const edgeIds=new Set();
  const edges=input.edges.map(e=>{if(!e||typeof e.id!=='string'||edgeIds.has(e.id)||!ids.has(e.source)||!ids.has(e.target)||e.source===e.target)throw fail('اتصال غير صحيح');edgeIds.add(e.id);return {id:str(e.id),source:e.source,target:e.target,type:str(e.type),protocol:str(e.protocol),port:str(e.port),notes:str(e.notes)};});
  return {nodes,edges};
