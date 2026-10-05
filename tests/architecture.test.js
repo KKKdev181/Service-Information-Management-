@@ -22,3 +22,11 @@ test('rejects dangling edges and file traversal',async()=>{
  await assert.rejects(()=>readArchitecture('../outside'));
 });
 test.after(()=>fs.rm(temp,{recursive:true,force:true}));
+
+test('layout follows dependencies, preserves cycles and separates environments without overlap',async()=>{
+ const {arrangeArchitecture}=await import('../public/architecture-view.js');
+ const graph={nodes:['db','lb','a','b','qa'].map(id=>({id,label:id,type:'Server',environment:id==='qa'?'QA':'Production',x:0,y:0,width:300,height:140})),edges:[{source:'lb',target:'a'},{source:'lb',target:'b'},{source:'a',target:'db'},{source:'db',target:'a'}]};
+ const before=JSON.stringify(graph.edges);arrangeArchitecture(graph);const by=Object.fromEntries(graph.nodes.map(n=>[n.id,n]));assert.ok(by.lb.x<by.a.x);assert.equal(by.a.x,by.db.x);assert.equal(JSON.stringify(graph.edges),before);
+ for(const a of graph.nodes)for(const b of graph.nodes)if(a!==b)assert.ok(a.x+a.width<=b.x||b.x+b.width<=a.x||a.y+a.height<=b.y||b.y+b.height<=a.y);
+});
+test('validates and preserves zone and resized cards',()=>{const g=validateGraph({nodes:[{id:'n',x:1,y:2,width:420,height:220,zone:'DATA'}],edges:[]});assert.equal(g.nodes[0].width,420);assert.equal(g.nodes[0].zone,'DATA');});
