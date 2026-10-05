@@ -1,3 +1,4 @@
+import { readArchitecture, saveArchitecture } from './architecture.js';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +12,8 @@ app.get('/api/services', asyncRoute(async (req, res) => res.json(await list())))
 app.post('/api/services', asyncRoute(async (req, res) => res.status(201).json(await upsert(null, req.body))));
 app.put('/api/services/:id', asyncRoute(async (req, res) => res.json(await upsert(req.params.id, req.body))));
 app.delete('/api/services/:id', asyncRoute(async (req, res) => { await remove(req.params.id); res.status(204).end(); }));
+app.get('/api/services/:id/architecture', asyncRoute(async (req,res)=>{if(!(await list()).some(x=>x.service.id===req.params.id))return res.status(404).json({error:'الخدمة غير موجودة'});res.json(await readArchitecture(req.params.id));}));
+app.put('/api/services/:id/architecture', asyncRoute(async (req,res)=>{if(!(await list()).some(x=>x.service.id===req.params.id))return res.status(404).json({error:'الخدمة غير موجودة'});res.json(await saveArchitecture(req.params.id,req.body));}));
 app.get('/api/export', asyncRoute(async (req, res) => res.download(await workbookPath(), 'service-implementation.xlsx')));
 app.post('/api/import/preview', express.raw({ type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', limit: '12mb' }), asyncRoute(async (req, res) => res.json(await previewWorkbook(req.body, decodeURIComponent(req.get('X-Import-Filename') || '')))));
 app.post('/api/import/commit', asyncRoute(async (req, res) => res.json(await importRecords(req.body.records))));
