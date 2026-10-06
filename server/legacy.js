@@ -37,8 +37,8 @@ export async function parseImplementationSheet(book, filename='') {
   if(!detail || !book.getWorksheet('Summary') || !rowWith(detail,'Host Name',3)) return null;
   const projectRow=rowWith(detail,'Project Name',4);
   const name=val(detail,projectRow,5) || val(book.getWorksheet('Summary'),1,3);
-  if(!name) throw Object.assign(new Error('تعذر تحديد اسم الخدمة من القالب. اكتب اسمها في خانة Project Name.'),{status:400});
-  const service={name,code:'',customer:'',owner:'',status:'Active',environment:'Multiple',description:`مستورد من Implementation Sheet: ${filename}`};
+  if(!name) throw Object.assign(new Error('Could not identify the service name in this template. Enter it in the Project Name.'),{status:400});
+  const service={name,code:'',customer:'',owner:'',status:'Active',environment:'Multiple',description:`Imported from Implementation Sheet: ${filename}`};
   const record={service,Servers:[],Endpoints:[],LoadBalancers:[],Connections:[],Networks:[]};
   for(let h=1;h<=Math.min(detail.rowCount,50);h++){
     if(text(detail,h,5)!=='Subnet Name')continue;
