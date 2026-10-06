@@ -29,3 +29,13 @@ tbody tr:hover,.impact-service:hover{background:#24374d}.detail-table tbody tr:h
 .stat-icon,.avatar,.detail-symbol,.empty-graphic{background:#234b43;color:#a3f1cc}.stat:nth-child(2) .stat-icon{background:#323f65;color:#c6ceff}.stat:nth-child(3) .stat-icon,.issue-icon{background:#4e3c21;color:#ffe0a1}.stat:nth-child(4) .stat-icon{background:#224452;color:#9ce5f5}.issue.review .issue-icon,.import-errors{background:#492c32;color:#ffb4ab;border-color:#80535c}
 .service-name{font-size:17px}.info-item strong{font-size:16px}.page-head h1{letter-spacing:0}.hero p,.intelligence-hero p{color:#d4e8e1}.hero .mini{color:#caf2c0}
 :focus-visible{outline:3px solid #79ddff;outline-offset:3px}
+
+/* Elm-inspired purple accents with readable local Arabic font fallbacks. */
+:root,body{background:#141125;font-family:'Segoe UI',Tahoma,Arial,sans-serif}
+.sidebar{background:#231735;border-color:#514267}.topbar,.panel,.stat,.detail-card,.detail-aside,.modal,.insight-panel,.issue{background:#201a34;border-color:#514267}
+.hero,.intelligence-hero{background:linear-gradient(120deg,#523074,#302044)}.brand-mark{background:#b392d4;color:#20152e}.side-nav a.active,.side-nav a:not(.active):hover{background:#563c73}.side-help{background:#302342;border-color:#665080}
+.btn,.close,.detail-jumps a,.service-intelligence .btn{background:#342747;border-color:#79628f}.btn:hover,.detail-jumps a:hover{background:#49345f}.btn.primary{background:#b896df;color:#21142e;border-color:#b896df}.btn.primary:hover{background:#ccb0ec}
+.search input,.toolbar select,.field input,.field select,.field textarea,.impact-search input{background:#171225;border-color:#79628f}
+th,.detail-table th,.detail-table th:first-child{background:#302442}.detail-table td:first-child{background:#201a34}.detail-table tr:nth-child(even),.detail-table tr:nth-child(even) td:first-child{background:#271f3b}tbody tr:hover,.impact-service:hover,.detail-table tbody tr:hover td{background:#3b2c50}
+.modal-footer,.form-section-header,.insight-start,.service-intelligence{background:#2a203c;border-color:#665080}.link-btn,.issue a,.impact-service span{color:#d4b8f3}
+.hero .mini{color:#e0c7fa}.hero p,.intelligence-hero p{color:#e5d9ef}
