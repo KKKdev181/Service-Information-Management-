@@ -1,3 +1,4 @@
+import {inventorySignature} from './service-facts.js';
 import {openConnections} from './connection-manager.js';
 import {groupArchitecture,roles,roleFor} from './architecture-groups.js';
 import {layoutArchitecture} from './architecture-layout.js';
@@ -28,6 +29,8 @@ function changed(){dirty=true;epoch++;status('Unsaved changes');}
 async function request(url,options){const r=await fetch(url,options);const data=await r.json();if(!r.ok)throw Error(data.error||'Request failed');return data;}
 function dimensions(){return renderArchitecture(visibleGraph(),null,null);}
 function draw(){
+ const stale=graph.revision&&graph.inventorySignature!==inventorySignature(record);$('inventory-notice').hidden=!stale;$('inventory-notice').textContent=stale?'Inventory has changed or this diagram has no inventory baseline. Review the current records, then use Generate from records if you want to replace this drawing.':'';
+
  $('collapse-groups').hidden=!grouped;$('direction').disabled=grouped;$('hint').textContent=grouped?'Select a group to explore components. Select an arrow for connection details.':linkMode?(linkSource?'Select the destination component':'Select the source, then the destination'):'Drag components to move them. Select a component or connection to edit.';
  const {svg,w,h}=renderArchitecture(visibleGraph(),selected,linkSource);
  $('canvas').setAttribute('viewBox',`0 0 ${w} ${h}`);$('canvas').setAttribute('width',w*zoom);$('canvas').setAttribute('height',h*zoom);$('zoom-label').textContent=Math.round(zoom*100)+'%';$('canvas').innerHTML=svg;
