@@ -1,3 +1,4 @@
+import {applyServerRules} from '../public/server-rules.js';
 import ExcelJS from 'exceljs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -8,7 +9,7 @@ const directory = path.resolve(process.env.DATA_DIR || './data');
 const file = path.join(directory, 'services.xlsx');
 const sheets = {
   Services: ['id', 'name', 'code', 'customer', 'owner', 'status', 'environment', 'description', 'updatedAt', 'updatedBy', 'revision', 'createdAt', 'hostingLocations', 'hostingType', 'serverCount'],
-  Servers: ['id', 'serviceId', 'name', 'environment', 'role', 'privateIp', 'publicIp', 'os', 'site', 'domain', 'cpu', 'ram', 'storage', 'notes'],
+  Servers: ['id', 'serviceId', 'name', 'environment', 'role', 'privateIp', 'publicIp', 'os', 'site', 'domain', 'cpu', 'ram', 'storage', 'notes', 'zone'],
   Endpoints: ['id', 'serviceId', 'url', 'dns', 'vip', 'port', 'protocol', 'environment', 'publicIp', 'wafIp', 'notes'],
   LoadBalancers: ['id', 'serviceId', 'name', 'vip', 'pool', 'members', 'port', 'waf', 'hostIp', 'hostPort', 'hostProtocol', 'vipProtocol', 'publishType', 'certificate', 'notes'],
   Connections: ['id', 'serviceId', 'type', 'source', 'destination', 'port', 'reference', 'notes', 'sourceIp', 'sourceHost', 'destinationIp', 'destinationHost', 'protocol', 'duration'],
@@ -62,6 +63,10 @@ async function readBook() {
     await fs.copyFile(file,path.join(directory,'services.before-duplicate-repair.'+Date.now()+'.xlsx'));
     await save(book);
   }
+  // Enrich existing workbooks once per actual change; preserve IDs and manual values.
+  const records=snapshot(book);let enriched=false;
+  for(const record of records){if(applyServerRules(record).changes.length){enriched=true;record.service.revision=String((Number(record.service.revision)||0)+1);record.service.updatedAt=new Date().toISOString();record.service.updatedBy='Server naming rules';}}
+  if(enriched){rewrite(book,'Services',records.map(r=>r.service));rewrite(book,'Servers',records.flatMap(r=>r.Servers));await save(book);}
   return book;
 }
 function rows(book, name) {
@@ -111,6 +116,7 @@ export const list = () => serialize(async () => snapshot(await readBook()));
 export const workbookPath = () => serialize(async () => { const book = await readBook(); if (!(await fs.stat(file).catch(() => null))) await save(book); return file; });
 export const upsert = (id, input) => serialize(async () => {
   validate(input);
+  input=structuredClone(input);applyServerRules(input);
   const book = await readBook();
   const services = rows(book, 'Services');
   const existing = services.find(item => item.id === id);
@@ -141,7 +147,7 @@ export const remove = id => serialize(async () => {
 });
 
 export async function previewWorkbook(buffer, filename='') {
-  try { const legacy=await readLegacyBuffer(buffer,filename); if(legacy)return [legacy]; }
+  try { const legacy=await readLegacyBuffer(buffer,filename); if(legacy){applyServerRules(legacy);return [legacy];} }
   catch(error) { if(error.status)throw error; /* Some simple workbooks are unsupported by ExcelJS streaming; use regular parsing below. */ }
   const book = new ExcelJS.Workbook();
   try { await book.xlsx.load(buffer); }
@@ -159,7 +165,7 @@ export async function previewWorkbook(buffer, filename='') {
   }
   const records = imported.Services.map(service=>({service,...Object.fromEntries(children.map(name=>[name,imported[name].filter(row=>row.serviceId===service.id)]))}));
   if (records.length > 1000) throw Object.assign(new Error('The file contains more than 1000 services. Split it into smaller files.'), { status: 400 });
-  return records.map(item => ({ ...item, service: Object.fromEntries(sheets.Services.map(k => [k, item.service[k]])) }));
+  return records.map(item => {applyServerRules(item);return { ...item, service: Object.fromEntries(sheets.Services.map(k => [k, item.service[k]])) };});
 }
 
 export const importRecords = items => serialize(async () => {
@@ -168,8 +174,9 @@ export const importRecords = items => serialize(async () => {
   const current = Object.fromEntries(Object.keys(sheets).map(name => [name, rows(book, name)]));
   const known = new Set(current.Services.map(s => `${safe(s.code).toLowerCase()}|${safe(s.name).toLowerCase()}`));
   let imported = 0, skipped = 0;
-  for (const item of items) {
-    validate(item);
+  for (const original of items) {
+    const item=structuredClone(original);
+    validate(item);applyServerRules(item);
     const name = safe(item.service.name), code = safe(item.service.code);
     const identity = `${code.toLowerCase()}|${name.toLowerCase()}`;
     if (known.has(identity)) { skipped++; continue; }
