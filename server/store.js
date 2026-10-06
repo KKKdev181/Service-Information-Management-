@@ -7,7 +7,7 @@ import { readLegacyBuffer } from './legacy.js';
 const directory = path.resolve(process.env.DATA_DIR || './data');
 const file = path.join(directory, 'services.xlsx');
 const sheets = {
-  Services: ['id', 'name', 'code', 'customer', 'owner', 'status', 'environment', 'description', 'updatedAt', 'updatedBy', 'revision'],
+  Services: ['id', 'name', 'code', 'customer', 'owner', 'status', 'environment', 'description', 'updatedAt', 'updatedBy', 'revision', 'createdAt'],
   Servers: ['id', 'serviceId', 'name', 'environment', 'role', 'privateIp', 'publicIp', 'os', 'site', 'domain', 'cpu', 'ram', 'storage', 'notes'],
   Endpoints: ['id', 'serviceId', 'url', 'dns', 'vip', 'port', 'protocol', 'environment', 'publicIp', 'wafIp', 'notes'],
   LoadBalancers: ['id', 'serviceId', 'name', 'vip', 'pool', 'members', 'port', 'waf', 'hostIp', 'hostPort', 'hostProtocol', 'vipProtocol', 'publishType', 'certificate', 'notes'],
@@ -100,7 +100,7 @@ export const upsert = (id, input) => serialize(async () => {
   if (existing && Number(input.service.revision) !== Number(existing.revision)) throw Object.assign(new Error('تم تحديث الخدمة بواسطة شخص آخر. حدّث الصفحة قبل الحفظ.'), { status: 409 });
   const serviceId = id || crypto.randomUUID();
   const record = Object.fromEntries(sheets.Services.map(key => [key, safe(input.service[key])]));
-  Object.assign(record, { id: serviceId, updatedAt: new Date().toISOString(), updatedBy: safe(input.updatedBy) || 'غير محدد', revision: String((Number(existing?.revision) || 0) + 1) });
+  Object.assign(record, { id: serviceId, createdAt: existing ? (existing.createdAt || '') : new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: safe(input.updatedBy) || 'غير محدد', revision: String((Number(existing?.revision) || 0) + 1) });
   rewrite(book, 'Services', [...services.filter(item => item.id !== serviceId), record]);
   for (const name of children) {
     const kept = rows(book, name).filter(row => row.serviceId !== serviceId);
@@ -156,7 +156,7 @@ export const importRecords = items => serialize(async () => {
     const identity = `${code.toLowerCase()}|${name.toLowerCase()}`;
     if (known.has(identity)) { skipped++; continue; }
     const id = crypto.randomUUID();
-    current.Services.push({ ...Object.fromEntries(sheets.Services.map(key => [key, safe(item.service[key])])), id, name, code, updatedAt: new Date().toISOString(), updatedBy: 'استيراد Excel', revision: '1' });
+    current.Services.push({ ...Object.fromEntries(sheets.Services.map(key => [key, safe(item.service[key])])), id, name, code, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'استيراد Excel', revision: '1' });
     for (const section of children) {
       for (const row of item[section]) current[section].push({ ...Object.fromEntries(sheets[section].map(key => [key, safe(row[key])])), id: crypto.randomUUID(), serviceId: id });
     }
