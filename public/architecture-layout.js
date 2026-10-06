@@ -1,6 +1,6 @@
 // ELK is served locally; diagrams and infrastructure data never leave the portal.
 export async function layoutArchitecture(graph, direction = 'DOWN', Engine = globalThis.ELK) {
- if (!Engine) throw Error('تعذر تحميل محرك الرسم. شغّل npm install وأعد تشغيل الموقع.');
+ if (!Engine) throw Error('Could not load the diagram engine. Run npm install and restart the portal.');
  const elk = new Engine();
  const result = await elk.layout({id:'root',layoutOptions:{
   'elk.algorithm':'layered','elk.direction':direction,'elk.edgeRouting':'ORTHOGONAL',
