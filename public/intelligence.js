@@ -1,3 +1,4 @@
+import {serviceFacts,traceDependencies} from './service-facts.js';
 import {applyServerRules} from './server-rules.js';
 const lower = value => String(value ?? '').trim().toLowerCase();
 const pieces = value => String(value ?? '').split(/[\s,\u060c;·]+/).map(x => x.trim()).filter(Boolean);
@@ -14,6 +15,7 @@ export function buildInventory(services) {
     for (const server of record.Servers || []) {
       for (const field of ['name','privateIp','publicIp','domain']) add(record,'Server',server.name || 'Server',field,server[field],{ serverIp:server.privateIp||server.publicIp });
     }
+    for(const component of record.Components||[])for(const field of ['name','cluster','namespace','url'])add(record,'Platform',component.name||component.type,field,component[field]);
     for (const endpoint of record.Endpoints || []) {
       for (const field of ['url','dns','vip','publicIp','wafIp']) add(record,'Publishing',endpoint.environment||'Service endpoint',field,endpoint[field]);
     }
@@ -40,7 +42,12 @@ export function inspectServices(services) {
     const push=(kind,message)=>findings.push({serviceId:s.id,serviceName:s.name,kind,message});
     for(const message of applyServerRules(structuredClone(record)).conflicts)push('review',message);
     if(!s.code)push('missing','CODE is not recorded');
-    if(!(record.Servers||[]).length)push('missing','No servers recorded');
+    if(!(record.Servers||[]).length&&!(record.Components||[]).length)push('missing','No infrastructure inventory recorded');
+    const facts=serviceFacts(record);
+    if(facts.platform==='Not specified')push('missing','Hosting platform is not recorded');
+    if(!facts.locations.length)push('missing','Hosting location is not recorded');
+    if(facts.declaredServers&&Number(facts.declaredServers)!==facts.servers)push('review',`Declared server count (${facts.declaredServers}) differs from inventory (${facts.servers})`);
+    for(const flow of record.Connections||[])if(!(flow.sourceIp||flow.sourceHost||flow.source)||!(flow.destinationIp||flow.destinationHost||flow.destination))push('missing','A connection is missing its source or destination');
     if(!(record.Endpoints||[]).length)push('missing','No endpoints or publishing details recorded');
     const ownIps=new Set((record.Servers||[]).flatMap(server=>[server.privateIp,server.publicIp].flatMap(ips)));
     for(const lb of record.LoadBalancers||[]) {
@@ -66,7 +73,11 @@ export function traceImpact(services, rawQuery) {
   const directServices=services.filter(s=>lower(s.service.name).includes(query)||lower(s.service.code).includes(query));
   const matchIps=new Set(ips(query));
   for(const item of direct)if(item.category==='Server')for(const ip of ips(item.serverIp||item.value))matchIps.add(ip);
-  const matchedFlows=flows.filter(f=>[f.source,f.destination,f.reference].some(v=>lower(v).includes(query)) || [...matchIps].some(ip=>f.sourceIps.includes(ip)||f.destinationIps.includes(ip)) || directServices.some(s=>s.service.id===f.serviceId));
+  let matchedFlows=flows.filter(f=>[f.source,f.destination,f.reference].some(v=>lower(v).includes(query)) || [...matchIps].some(ip=>f.sourceIps.includes(ip)||f.destinationIps.includes(ip)) || directServices.some(s=>s.service.id===f.serviceId));
+  const traced=traceDependencies(services,rawQuery);
+  const additional=traced.links.map(e=>({serviceId:e.serviceId,serviceName:e.serviceName,source:e.source,destination:e.target,type:e.type,protocol:e.protocol,port:e.port,depth:e.depth}));
+  const flowKeys=new Set(matchedFlows.map(e=>JSON.stringify([e.serviceId,e.source,e.destination,e.type,e.port])));
+  for(const e of additional){const key=JSON.stringify([e.serviceId,e.source,e.destination,e.type,e.port]);if(!flowKeys.has(key)){matchedFlows.push(e);flowKeys.add(key);}}
   const ids=new Set([...direct.map(r=>r.serviceId),...matchedFlows.map(f=>f.serviceId),...directServices.map(s=>s.service.id)]);
   return {resources:direct,flows:matchedFlows,services:services.filter(s=>ids.has(s.service.id)).map(s=>({id:s.service.id,name:s.service.name,code:s.service.code}))};
 }
