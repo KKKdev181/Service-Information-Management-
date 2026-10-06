@@ -1,54 +1,75 @@
-# Technology Architecture Hub
+# Technology Service Hub
 
-Internal service implementation records with servers, endpoints, load balancers and network connections. Arabic RTL UI with search across names, IPs, URLs and VIPs. **No database**: the API stores data in one Excel workbook (`data/services.xlsx`) with separate relational sheets. The workbook is generated on first use. Real data is ignored by Git and must never be committed to the public repository.
+Internal service catalog, infrastructure inventory, architecture editor and record-based change-impact analysis. **No database:** inventory lives in Excel; saved architecture diagrams live in JSON.
 
-## Run in GitHub Codespaces / locally
+## Run
 
-Requires Node.js 20+.
+Requires Node.js 20 or newer.
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
-Open forwarded port 3000. Add a service, then use **تصدير Excel** to download the workbook. The data persists in the Codespace filesystem until that environment is deleted; back it up or move `DATA_DIR` to persistent approved storage. This repository contains no production data.
+Open forwarded port 3000 in Codespaces. Production command: `npm start`.
 
-## Deploy to one Windows Server
+## Service workflow
 
-1. Install supported Node.js and copy the application to a secured directory.
-2. Configure `DATA_DIR` to a persistent server directory writable by the app process, outside the public web root; give authorized administrators access only.
-3. Run `npm ci` and `npm start`; by default the app binds to `127.0.0.1:3000`.
-4. Publish through IIS as a reverse proxy to that local address, with internal DNS, HTTPS, and organization approved authentication enforced at the proxy. Do not expose port 3000 directly. Disable anonymous access to the site. The application currently does **not** implement authentication or role based authorization; the `updatedBy` field is manually entered, not verified identity.
-5. Back up `data/services.xlsx` regularly. The app also writes `services.backup.xlsx` before each update. Use one application process and one host for this file based storage; do not use multiple app instances against the same workbook.
+- **Service catalog:** search names, addresses, URLs, platform components, clusters and namespaces; filter status and GCP/NIC/SALAM hosting locations. Four executive indicators open the records behind their counts.
+- **Overview:** purpose, code, lifecycle status, hosting, derived environment summary, recorded infrastructure counts, publishing/WAF/VIP details, generated grouped architecture preview and actionable record checks.
+- **Infrastructure:** filter by environment and name/IP; inspect expandable servers and platform components. Service-wide load-balancer pools and network/VLAN records remain visible because their environment is not assumed.
+- **Connections & impact:** see recorded communication paths and trace an exact name, IP, URL or VIP across services. Direct and indirect relationships include publishing → WAF → VIP → backend and communication records. Traversal follows both directions to identify possible dependencies; it is not proof of an outage or live reachability.
+- **Maintain records:** contextual edit buttons open expandable sections and individual records, with selectable environments/platforms and naming-rule assistance. Save explicitly. A server count entered manually is labeled separately from the actual recorded inventory and mismatches are flagged.
+- **Architecture:** grouped overview by environment/role; expand groups, edit individual nodes, manage connections through searchable From/To selectors, automatic ELK arrangement and SVG export. Component changes remain separate from inventory.
 
-Environment: `PORT` (default 3000), `HOST` (default 127.0.0.1), `DATA_DIR` (default `./data`). Do not edit the workbook directly while the application is running. Use the export for analysis and offline review.
+## Data model
 
-## Workbook sheets
+`DATA_DIR/services.xlsx` contains:
 
-- `Services`: identity, customer, owner, status, environment, last update, revision.
-- `Servers`: host, IPs, role, OS, site.
-- `Endpoints`: URL, DNS, VIP, port, protocol.
-- `LoadBalancers`: VIP, pool, members, port, WAF.
-- `Connections`: NAT, GSN, Site-to-Site VPN or other connections with source, destination, port and ticket reference.
+| Sheet | Purpose |
+| --- | --- |
+| Services | Name, code, status, purpose, hosting locations/type, optional declared count, update metadata and revision |
+| Servers | Names/IPs, role, environment, location, zone, platform, OS and sizing |
+| Components | OpenShift/platform components, cluster, namespace, environment, location, URL and role |
+| Endpoints | Publishing URL/DNS, public IP, WAF IP, VIP and protocol/port |
+| LoadBalancers | VIP, pool, backend addresses and ports, publishing and certificate details |
+| Connections | Source/destination, type, protocol, ports, duration and request reference |
+| Networks | Subnet, IPAM/range, VLAN, gateway and context |
 
-The update API checks revisions to prevent accidentally overwriting a newer service edit. Writes are serialized within the process and the workbook is replaced atomically. Excel is the primary data file, not a database server. Importing legacy workbooks requires field mapping and validation; this first version provides export and manual entry.
+Legacy customer/owner columns remain in the workbook for compatibility but are not displayed or required. Older portal workbooks without Components are supported. Schema migration maps columns by header and preserves existing records. Workbook writes are serialized and replaced atomically with a prior-version backup. Revision checks reject stale edits. Child IDs survive edits.
 
-## Importing existing Excel files
+Platform can be VM, OpenShift or Hybrid. The workspace also derives Hybrid from explicitly recorded VM and OpenShift components. Server existence or naming prefixes alone are not proof of VM hosting.
 
-Choose **استيراد Excel** and select one or more `.xlsx` files. The portal first previews the services and shows any files whose format is not recognized. Review the list and click **استيراد الخدمات** to save. Matching service name + code pairs are skipped, so re-importing the same file does not duplicate them. Imports are saved to the server workbook, not to OneDrive.
+## Naming rules
 
-This first importer recognizes workbooks exported from this portal (sheets `Services`, `Servers`, `Endpoints`, `LoadBalancers`, `Connections`). Existing Implementation Sheet files with different headers or layouts need a mapping. Provide one representative **redacted** workbook so its server, URL, IP and network fields can be mapped and tested before importing the whole OneDrive folder. Download or sync the files from OneDrive locally, then choose them in the browser; the application has no direct OneDrive authorization.
+PN1 = old Production; PN3 = NIC Production; PE1 = SALAM Corporate Production; SN3 = NIC Staging; SE1 = SALAM Staging; BN4 = DR; TE/T = QA; DE = Dev IaaS; D = Dev; TG = GCP Dev. Longest prefixes match first, case-insensitively. Only missing values are filled; conflicts are surfaced in record review. Unspecified locations/platforms are not guessed. Existing workbook records are enriched when loaded; changes receive an updated revision and backup. The edit form also provides an explicit fill button.
 
-### Implementation Sheet template mapping
+## Import / export
 
-The importer also recognizes the supplied `Implementation details_Template v1.0 New.xlsx` layout, reading the project name, server inventory (including CPU, RAM, domain and storage), publishing endpoints, load balancer rows, subnet/VLAN rows, application and standard communication matrix rows, and populated NAT rows. Example rows and empty template cells are ignored. The source workbook remains in OneDrive; the application imports selected structured fields into its own server workbook. Sheets such as checklist, design, software/hardware assets, physical connectivity and storage inventory are not yet modeled or imported. Other versions of the template may need adjusted mapping; review the preview before committing any batch.
+Import one or more `.xlsx` files and review the preview before committing. Supported formats: portal exports and the mapped Implementation Sheet template (`Summary`, `Server Details`, communication matrix and NAT sheets). Unknown templates require a mapping. Re-imports with the same service name and code are skipped. The Components sheet is optional for older exports. Export downloads the full catalog, not just the selected service.
 
-## Impact analysis and record checks
+OneDrive files must be downloaded or synced before selecting them; there is no direct OneDrive API integration. Unmodeled legacy sheets such as checklists and physical connectivity are not imported.
 
-Open **تحليل الأثر وجودة البيانات** to search an IP, server name, URL, VIP or service name. The page shows matching assets and network flows, and brings in flows from other service records when they explicitly contain the same server IP. It flags missing owner/CODE/server/endpoint fields and duplicate server IPs across services for review. The analysis is derived from the local Excel workbook each time data is loaded; it makes no live calls to F5, firewall, CMDB, DNS or OneDrive and cannot prove actual network reachability. Verify proposed changes against those systems before implementation.
+## Diagram freshness
 
-## Interactive Architecture editor
+Saved diagrams are under `DATA_DIR/architecture/<service-id>.json`, with a prior-version backup and independent revisions. An inventory signature flags when source inventory has changed since generation. Legacy diagrams without a baseline also prompt review. **Generate from records replaces the diagram after confirmation**; it does not merge or silently discard manual diagrams. The service overview preview always uses current inventory and is labeled accordingly. SVG exports include local illustrations.
 
-Open a service and click **Architecture**. The editor creates an initial drawing from its recorded servers, publishing endpoints, VIP/backend matches and connection rows. Drag nodes to move them. Use **ربط عنصرين**, click source then destination, and edit the connection type, protocol and ports in the side panel. Add Server, Database, Load Balancer, WAF, Firewall, External or URL nodes and assign environments (Production, Staging, Dev/QA, DR). Click **تطبيق التعديل** for side-panel edits, then **حفظ الرسم** to persist the graph. SVG export downloads the displayed drawing.
+## Deployment and persistence
 
-Graphs are stored as JSON in `DATA_DIR/architecture/<service-id>.json`, with a prior-version backup. They are separate from Excel: editing a diagram does not modify inventory records, and later inventory edits do not automatically overwrite diagrams. **توليد من بيانات الخدمة** replaces the current drawing after confirmation; save explicitly to persist that replacement. The generation uses recorded exact matches only and does not discover real infrastructure. Existing authentication and single-process deployment requirements apply. Run `node --test tests/architecture.test.js` for persistence, revision conflict and generation checks.
+Use one Node process on one host with persistent `DATA_DIR` outside the public directory. Default `HOST=127.0.0.1`, `PORT=3000`. On Windows Server, place IIS with HTTPS and organization-approved authentication in front of Node, disable anonymous access and do not expose port 3000 directly. The app does not implement SSO or role-based authorization; `updatedBy` is manually entered, not verified identity.
+
+Back up the entire DATA_DIR, including diagrams. Codespace data lasts only as long as its filesystem. Do not commit real workbooks or architecture data to Git or edit the workbook directly while the application is running.
+
+## Maintenance and verification
+
+- `public/service-facts.js`: derived facts, inventory signature and exact-address dependency traversal.
+- `public/service-workspace.js`: Overview / Infrastructure / Connections rendering.
+- `public/app.js`: catalog, routing, imports and record-edit controller.
+- `public/intelligence.js`: inventory search and quality checks.
+- `public/server-rules.js`: shared naming rules.
+- `public/architecture-*.js`, `connection-manager.js`: generation, grouping, layout, rendering and editing.
+- `server/store.js`: Excel persistence, migration and imports.
+- `server/architecture.js`: diagram validation and persistence.
+- `public/styles.css`: shared design tokens/components; `workspace.css`: service workspace; `architecture.css`: diagram workspace.
+
+Run `node --test tests/*.test.js`. Tests cover data migration, Excel roundtrip, stale saves, duplicate import, naming rules, grouping, connection validation, impact traversal, derived hybrid facts and diagram persistence. See [repository review](docs/REVAMP.md) for product and refactoring decisions.
