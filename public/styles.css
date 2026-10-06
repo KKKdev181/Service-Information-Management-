@@ -39,3 +39,5 @@ tbody tr:hover,.impact-service:hover{background:#24374d}.detail-table tbody tr:h
 th,.detail-table th,.detail-table th:first-child{background:#302442}.detail-table td:first-child{background:#201a34}.detail-table tr:nth-child(even),.detail-table tr:nth-child(even) td:first-child{background:#271f3b}tbody tr:hover,.impact-service:hover,.detail-table tbody tr:hover td{background:#3b2c50}
 .modal-footer,.form-section-header,.insight-start,.service-intelligence{background:#2a203c;border-color:#665080}.link-btn,.issue a,.impact-service span{color:#d4b8f3}
 .hero .mini{color:#e0c7fa}.hero p,.intelligence-hero p{color:#e5d9ef}
+
+.brand>span:last-child{min-width:0}.brand strong{font-size:16px;line-height:1.65;letter-spacing:0;white-space:normal;overflow-wrap:normal}.brand small{display:block;margin-top:6px;line-height:1.7}.brand{align-items:flex-start}.brand-mark{flex-shrink:0}.hero .mini{line-height:1.7}
