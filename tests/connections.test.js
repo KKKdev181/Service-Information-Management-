@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {validateConnection} from '../public/connection-manager.js';
+const graph={nodes:[{id:'a'},{id:'b'}],edges:[{id:'e',source:'a',target:'b',type:'HTTPS',protocol:'TCP',port:'443'}]};
+test('connection form rejects missing endpoints, self links and exact duplicates',()=>{const v={source:'a',target:'b',type:'HTTPS',protocol:'TCP',port:'443'};assert.ok(validateConnection(graph,v));assert.ok(validateConnection(graph,{...v,target:'a'}));assert.ok(validateConnection(graph,{...v,target:'missing'}));assert.equal(validateConnection(graph,v,'e'),'');assert.equal(validateConnection(graph,{...v,port:'8443'}),'');assert.equal(validateConnection(graph,{...v,source:'b',target:'a'}),'');});
