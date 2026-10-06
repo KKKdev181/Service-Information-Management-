@@ -77,3 +77,17 @@ th,.detail-table th,.detail-table th:first-child{background:#1c2028;color:var(--
 @media(max-width:1150px){.content{padding:28px 24px 48px}.status-cards.executive-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.page-head{align-items:flex-start;flex-wrap:wrap}}
 @media(max-width:720px){.content{padding:24px 16px 40px}.topbar{padding-inline:16px}.page-head h1{font-size:24px}.head-buttons{gap:8px}.btn{padding:9px 12px}}
 @media(max-width:440px){.status-cards.executive-cards{grid-template-columns:1fr}}
+
+/* Restrained color and depth, with distinct executive metrics. */
+:root{--bg:#10101a;--surface:#1a1928;--raised:#252236;--line:#3b354e;--accent:#c0a0ee}
+.sidebar{background:#161321}.topbar{background:#14121e}.content{max-width:1400px}
+.brand-mark{background:#3a2a53;color:#ddc3ff}.side-nav a.active{background:#362748;border:1px solid #654681}.nav-count{background:#60427b}
+.executive-card{border-color:#454057;background:linear-gradient(155deg,#252136,#191925);box-shadow:0 8px 24px #00000024;transition:transform .15s,border-color .15s}
+.executive-card:before{display:block;height:3px;left:20px;right:20px;background:#b89cdd}
+.executive-card:nth-child(2){background:linear-gradient(155deg,#1c3032,#191e28)}.executive-card:nth-child(2):before{background:#80d8c0}
+.executive-card:nth-child(3){background:linear-gradient(155deg,#222c42,#191c29)}.executive-card:nth-child(3):before{background:#92b6ef}
+.executive-card:nth-child(4){background:linear-gradient(155deg,#332b27,#201c27)}.executive-card:nth-child(4):before{background:#e4bd82}
+.executive-card:hover{transform:translateY(-2px);border-color:#bfa1e1}.executive-card.selected{border-color:#d2b3f0}
+.executive-title{color:#e5deee}.executive-card>strong{color:#f5efff}.executive-card:nth-child(2)>strong{color:#a5ead8}.executive-card:nth-child(3)>strong{color:#b5d0fa}.executive-card:nth-child(4)>strong{color:#efd1a3}
+.panel{box-shadow:0 8px 28px #00000020;border-color:#40394e}.btn.primary{background:#be9be8;border-color:#cbaaf2;box-shadow:0 3px 12px #b38bdd18}.executive-ring span{background:#1d202c}
+@media(prefers-reduced-motion:reduce){.executive-card{transition:none}.executive-card:hover{transform:none}}
