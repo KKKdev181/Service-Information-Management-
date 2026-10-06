@@ -8,3 +8,7 @@
 #viewport{background-color:#0b1220;background-image:radial-gradient(#2d4057 1px,transparent 1px)}
 .arch-tools .selected{background:#285c56;border-color:#78e4ca;color:#fff}
 @media(max-width:800px){#inspector{width:240px}}
+
+/* Center small diagrams; keep large diagrams scrollable from either edge. */
+#canvas{margin-inline:auto}#viewport{padding:24px;direction:ltr;background-color:#141125;background-image:radial-gradient(#403455 1px,transparent 1px)}
+.arch-header,.arch-tools,#inspector{background:#201a34;border-color:#514267}.arch-tools select,#inspector input,#inspector select,#inspector textarea{background:#171225;border-color:#76628f}.arch-tools .selected{background:#62458b;border-color:#c7a8f1}
