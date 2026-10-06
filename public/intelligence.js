@@ -37,7 +37,6 @@ export function inspectServices(services) {
   for (const record of services) {
     const s=record.service;
     const push=(kind,message)=>findings.push({serviceId:s.id,serviceName:s.name,kind,message});
-    if(!s.owner)push('missing','Service owner is missing');
     if(!s.code)push('missing','CODE is not recorded');
     if(!(record.Servers||[]).length)push('missing','No servers recorded');
     if(!(record.Endpoints||[]).length)push('missing','No endpoints or publishing details recorded');
