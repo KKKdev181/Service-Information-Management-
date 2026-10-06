@@ -32,6 +32,7 @@ async function readBook() {
   await fs.mkdir(directory, { recursive: true });
   const book = new ExcelJS.Workbook();
   if (await fs.stat(file).catch(() => null)) await book.xlsx.readFile(file);
+  let repaired=false;
   for (const [name, columns] of Object.entries(sheets)) {
     if (!book.getWorksheet(name)) {
       const sheet = book.addWorksheet(name);
@@ -46,10 +47,20 @@ async function readBook() {
     if(columns.some((column,i)=>oldHeaders[i]!==column)) {
       const oldRows=[];
       sheet.eachRow((row,index)=>{if(index>1)oldRows.push(Object.fromEntries(oldHeaders.map((key,i)=>[key,row.getCell(i+1).value??''])))});
-      if(sheet.rowCount>1)sheet.spliceRows(2,sheet.rowCount-1);
+      clearDataRows(sheet);
       columns.forEach((column,i)=>sheet.getRow(1).getCell(i+1).value=column);
       for(const row of oldRows)sheet.addRow(columns.map(key=>row[key]??''));
     }
+  }
+  // Repair only byte-equivalent row values, including IDs; distinct records remain untouched.
+  for(const name of Object.keys(sheets)){
+    const records=rows(book,name),seen=new Set(),unique=[];
+    for(const record of records){const key=JSON.stringify(record);if(seen.has(key)){repaired=true;continue;}seen.add(key);unique.push(record);}
+    if(unique.length!==records.length)rewrite(book,name,unique);
+  }
+  if(repaired){
+    await fs.copyFile(file,path.join(directory,'services.before-duplicate-repair.'+Date.now()+'.xlsx'));
+    await save(book);
   }
   return book;
 }
@@ -62,10 +73,14 @@ function rows(book, name) {
   });
   return result;
 }
+function clearDataRows(sheet){
+  // spliceRows at the end of a sheet is unreliable in this ExcelJS version.
+  for(let i=2;i<=sheet.rowCount;i++)sheet.getRow(i).values=[];
+}
 function rewrite(book, name, records) {
   const sheet = book.getWorksheet(name);
-  if (sheet.rowCount > 1) sheet.spliceRows(2, sheet.rowCount - 1);
-  for (const record of records) sheet.addRow(sheets[name].map(column => textCell(record[column])));
+  clearDataRows(sheet);
+  records.forEach((record,index)=>{sheet.getRow(index+2).values=sheets[name].map(column=>textCell(record[column]));});
 }
 async function save(book) {
   const temp = path.join(directory, `.${crypto.randomUUID()}.xlsx`);
