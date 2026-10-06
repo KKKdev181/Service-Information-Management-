@@ -9,13 +9,14 @@ const directory = path.resolve(process.env.DATA_DIR || './data');
 const file = path.join(directory, 'services.xlsx');
 const sheets = {
   Services: ['id', 'name', 'code', 'customer', 'owner', 'status', 'environment', 'description', 'updatedAt', 'updatedBy', 'revision', 'createdAt', 'hostingLocations', 'hostingType', 'serverCount'],
-  Servers: ['id', 'serviceId', 'name', 'environment', 'role', 'privateIp', 'publicIp', 'os', 'site', 'domain', 'cpu', 'ram', 'storage', 'notes', 'zone'],
+  Components: ['id','serviceId','name','type','environment','site','cluster','namespace','url','role','notes'],
+  Servers: ['id', 'serviceId', 'name', 'environment', 'role', 'privateIp', 'publicIp', 'os', 'site', 'domain', 'cpu', 'ram', 'storage', 'notes', 'zone', 'platform'],
   Endpoints: ['id', 'serviceId', 'url', 'dns', 'vip', 'port', 'protocol', 'environment', 'publicIp', 'wafIp', 'notes'],
   LoadBalancers: ['id', 'serviceId', 'name', 'vip', 'pool', 'members', 'port', 'waf', 'hostIp', 'hostPort', 'hostProtocol', 'vipProtocol', 'publishType', 'certificate', 'notes'],
   Connections: ['id', 'serviceId', 'type', 'source', 'destination', 'port', 'reference', 'notes', 'sourceIp', 'sourceHost', 'destinationIp', 'destinationHost', 'protocol', 'duration'],
   Networks: ['id', 'serviceId', 'name', 'ipam', 'range', 'vlan', 'subnet', 'gateway', 'context', 'notes']
 };
-const children = ['Servers', 'Endpoints', 'LoadBalancers', 'Connections', 'Networks'];
+const children = ['Components', 'Servers', 'Endpoints', 'LoadBalancers', 'Connections', 'Networks'];
 let queue = Promise.resolve();
 const safe = value => String(value ?? '').trim().slice(0, 1000);
 const textCell = value => {
@@ -33,9 +34,10 @@ async function readBook() {
   await fs.mkdir(directory, { recursive: true });
   const book = new ExcelJS.Workbook();
   if (await fs.stat(file).catch(() => null)) await book.xlsx.readFile(file);
-  let repaired=false;
+  let repaired=false,migrated=false;
   for (const [name, columns] of Object.entries(sheets)) {
     if (!book.getWorksheet(name)) {
+      migrated=true;
       const sheet = book.addWorksheet(name);
       sheet.addRow(columns);
       sheet.views = [{ state: 'frozen', ySplit: 1 }];
@@ -46,11 +48,12 @@ async function readBook() {
     const sheet=book.getWorksheet(name);
     const oldHeaders=sheet.getRow(1).values.slice(1).map(String);
     if(columns.some((column,i)=>oldHeaders[i]!==column)) {
+      migrated=true;
       const oldRows=[];
       sheet.eachRow((row,index)=>{if(index>1)oldRows.push(Object.fromEntries(oldHeaders.map((key,i)=>[key,row.getCell(i+1).value??''])))});
       clearDataRows(sheet);
       columns.forEach((column,i)=>sheet.getRow(1).getCell(i+1).value=column);
-      for(const row of oldRows)sheet.addRow(columns.map(key=>row[key]??''));
+      oldRows.forEach((row,index)=>{sheet.getRow(index+2).values=columns.map(key=>row[key]??'');});
     }
   }
   // Repair only byte-equivalent row values, including IDs; distinct records remain untouched.
@@ -66,7 +69,8 @@ async function readBook() {
   // Enrich existing workbooks once per actual change; preserve IDs and manual values.
   const records=snapshot(book);let enriched=false;
   for(const record of records){if(applyServerRules(record).changes.length){enriched=true;record.service.revision=String((Number(record.service.revision)||0)+1);record.service.updatedAt=new Date().toISOString();record.service.updatedBy='Server naming rules';}}
-  if(enriched){rewrite(book,'Services',records.map(r=>r.service));rewrite(book,'Servers',records.flatMap(r=>r.Servers));await save(book);}
+  if(enriched){rewrite(book,'Services',records.map(r=>r.service));rewrite(book,'Servers',records.flatMap(r=>r.Servers));}
+  if(enriched||migrated)await save(book);
   return book;
 }
 function rows(book, name) {
@@ -102,8 +106,9 @@ function validate(input) {
   if (!service || !safe(service.name)) throw Object.assign(new Error('Service name is required'), { status: 400 });
   if (safe(service.name).length > 180) throw Object.assign(new Error('Service name is too long'), { status: 400 });
   if(service.hostingLocations && String(service.hostingLocations).split(',').some(v=>!['GCP','NIC','SALAM'].includes(v.trim()))) throw Object.assign(new Error('Select valid hosting locations: GCP, NIC, SALAM.'),{status:400});
-  if(service.hostingType && !['OpenShift','VM'].includes(service.hostingType)) throw Object.assign(new Error('Select OpenShift or VM.'),{status:400});
+  if(service.hostingType && !['OpenShift','VM','Hybrid'].includes(service.hostingType)) throw Object.assign(new Error('Select OpenShift, VM or Hybrid.'),{status:400});
   if(service.serverCount!==undefined && service.serverCount!==null && service.serverCount!=='' && (!/^\d+$/.test(String(service.serverCount)) || !Number.isSafeInteger(Number(service.serverCount)))) throw Object.assign(new Error('Number of servers must be a non-negative whole number.'),{status:400});
+  input.Components ??= [];
   for (const name of children) {
     if (!Array.isArray(input[name]) || input[name].length > 300) throw Object.assign(new Error(`Section ${name} is invalid`), { status: 400 });
   }
@@ -130,7 +135,7 @@ export const upsert = (id, input) => serialize(async () => {
     const kept = rows(book, name).filter(row => row.serviceId !== serviceId);
     const added = input[name].map(item => ({
       ...Object.fromEntries(sheets[name].map(key => [key, safe(item[key])])),
-      id: crypto.randomUUID(), serviceId
+      id: rows(book,name).some(old=>old.id===item.id&&old.serviceId===serviceId)?item.id:crypto.randomUUID(), serviceId
     }));
     rewrite(book, name, [...kept, ...added]);
   }
@@ -147,7 +152,7 @@ export const remove = id => serialize(async () => {
 });
 
 export async function previewWorkbook(buffer, filename='') {
-  try { const legacy=await readLegacyBuffer(buffer,filename); if(legacy){applyServerRules(legacy);return [legacy];} }
+  try { const legacy=await readLegacyBuffer(buffer,filename); if(legacy){legacy.Components=[];applyServerRules(legacy);return [legacy];} }
   catch(error) { if(error.status)throw error; /* Some simple workbooks are unsupported by ExcelJS streaming; use regular parsing below. */ }
   const book = new ExcelJS.Workbook();
   try { await book.xlsx.load(buffer); }
@@ -155,7 +160,7 @@ export async function previewWorkbook(buffer, filename='') {
   const imported={};
   for (const [name, columns] of Object.entries(sheets)) {
     const sheet = book.getWorksheet(name);
-    if(!sheet && name==='Networks'){imported[name]=[];continue;}
+    if(!sheet && ['Networks','Components'].includes(name)){imported[name]=[];continue;}
     const headers=sheet && sheet.getRow(1).values.slice(1).map(String);
     if (!sheet || !headers.includes('id') || (name!=='Services' && !headers.includes('serviceId')) || (name==='Services' && !headers.includes('name')))
       throw Object.assign(new Error('The file format does not match the portal export template. A sample of the original template is needed to configure its import.'), { status: 400 });
