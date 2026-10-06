@@ -25,26 +25,43 @@ const hasText=v=>!!String(v||'').trim()&&!/^(?:-|n\/a|na|none|غير محدد)$/
 function overviewGroups(){
  const recent=x=>{const t=Date.parse(x.service.createdAt);return Number.isFinite(t)&&t<=Date.now()&&t>=Date.now()-overviewDays*86400000};
  return [
+ {id:'all',label:'إجمالي الخدمات',note:'جميع الخدمات المسجلة',rows:services},
  {id:'published',label:'خدمات لها بيانات نشر',note:'URL أو DNS أو VIP مسجل؛ لا يعني تحقق التشغيل',rows:services.filter(x=>x.Endpoints.some(e=>[e.url,e.dns,e.vip].some(hasText))||x.LoadBalancers.some(e=>hasText(e.vip)))},
  {id:'new',label:'الخدمات الجديدة',note:'أضيفت للسجل خلال '+overviewDays+' يومًا',rows:services.filter(recent)},
- {id:'production',label:'خدمات Production',note:'بيئة الخدمة أو أحد سيرفراتها Production',rows:services.filter(x=>x.service.environment==='Production'||x.Servers.some(n=>n.environment==='Production'))},
  {id:'planning',label:'خدمات قيد التجهيز',note:'الحالة المسجلة Planning',rows:services.filter(x=>x.service.status==='Planning')},
- {id:'connections',label:'خدمات لها اتصالات',note:'اتصالات موثقة في سجل الخدمة',rows:services.filter(x=>x.Connections.length>0)},
- {id:'owner',label:'خدمات بلا مالك مسجل',note:'تحتاج تحديد مسؤول الخدمة',rows:services.filter(x=>!hasText(x.service.owner))}
  ];
 }
+
+function executiveVisual(g){
+ const total=services.length,n=g.rows.length,pct=total?Math.round(n/total*100):0;
+ if(g.id==='new'){
+  const now=Date.now(),step=overviewDays*86400000/6,bins=Array(6).fill(0);
+  for(const x of g.rows){const i=Math.min(5,Math.max(0,Math.floor((Date.parse(x.service.createdAt)-(now-overviewDays*86400000))/step)));bins[i]++;}
+  const max=Math.max(1,...bins);
+  return `<div class="executive-bars" role="img" aria-label="الخدمات المضافة خلال الفترة، من الأقدم للأحدث: ${bins.join('، ')}">${bins.map((v,i)=>`<div><span>${v}</span><i style="height:${v/max*48}px" title="${v} خدمة"></i></div>`).join('')}</div><span class="visual-caption">الإضافات خلال ${overviewDays} يومًا · الأقدم ← الأحدث</span>`;
+ }
+ if(g.id==='all'){
+ const items=[['نشطة','Active','#80d8c0'],['قيد التجهيز','Planning','#f5c778'],['غير نشطة','Inactive','#a3a2ba']];
+ const known=items.map(([label,status,color])=>({label,color,n:services.filter(x=>x.service.status===status).length}));
+ const other=total-known.reduce((a,x)=>a+x.n,0);if(other)known.push({label:'غير محددة',color:'#7e91b5',n:other});
+ return `<div class="executive-stack" role="img" aria-label="${known.map(x=>x.label+': '+x.n).join('، ')}">${known.map(x=>`<i style="width:${total?x.n/total*100:0}%;background:${x.color}"></i>`).join('')}</div><div class="executive-legend">${known.map(x=>`<span><i style="background:${x.color}"></i>${x.label} ${x.n}</span>`).join('')}</div>`;
+ }
+ return `<div class="executive-ring-row"><div class="executive-ring" style="--progress:${pct}%" role="img" aria-label="${pct}% من إجمالي الخدمات"><span>${pct}%</span></div><span class="visual-caption">${n} من ${total}<br>من إجمالي الخدمات</span></div>`;
+}
+
 function dashboardOverview(){
  const groups=overviewGroups(),selected=groups.find(g=>g.id===overviewCategory);
  const unknown=services.filter(x=>!Number.isFinite(Date.parse(x.service.createdAt))).length;
  const evidence=x=>{
  if(overviewCategory==='published')return [...x.Endpoints.flatMap(e=>[e.url,e.dns,e.vip]),...x.LoadBalancers.map(e=>e.vip)].filter(hasText).filter((v,i,a)=>a.indexOf(v)===i).join(' · ');
  if(overviewCategory==='new')return 'تاريخ الإضافة: '+date(x.service.createdAt);
+ if(overviewCategory==='all')return 'الحالة: '+({Active:'نشطة',Planning:'قيد التجهيز',Inactive:'غير نشطة'}[x.service.status]||'غير محددة');
  if(overviewCategory==='connections')return x.Connections.length+' اتصال · '+[...new Set(x.Connections.map(e=>e.type).filter(hasText))].join(' / ');
  if(overviewCategory==='production')return 'Production · '+x.Servers.filter(n=>n.environment==='Production').length+' سيرفر مسجل في البيئة';
  return overviewCategory==='owner'?'مالك الخدمة غير مسجل':'الحالة: قيد التجهيز';
  };
- return `<section class="status-overview"><div class="section-head"><h2>نظرة عامة على الخدمات</h2><label>فترة الخدمات الجديدة <select id="overview-days">${[7,30,90].map(n=>`<option value="${n}" ${overviewDays===n?'selected':''}>آخر ${n} يومًا</option>`).join('')}</select></label></div>
- <div class="status-cards">${groups.map(g=>`<button type="button" class="status-card ${overviewCategory===g.id?'selected':''}" data-action="overview" data-category="${g.id}" aria-pressed="${overviewCategory===g.id}"><span>${g.label}</span><strong>${g.rows.length}</strong><small>${g.note}</small><b>عرض الخدمات ←</b></button>`).join('')}</div>
+ return `<section class="status-overview"><div class="section-head"><h2>المؤشرات التنفيذية</h2><label>فترة الخدمات الجديدة <select id="overview-days">${[7,30,90].map(n=>`<option value="${n}" ${overviewDays===n?'selected':''}>آخر ${n} يومًا</option>`).join('')}</select></label></div>
+ <div class="status-cards executive-cards">${groups.map(g=>`<button type="button" class="status-card executive-card ${overviewCategory===g.id?'selected':''}" data-action="overview" data-category="${g.id}" aria-pressed="${overviewCategory===g.id}"><span class="executive-title">${g.label}</span><strong>${g.rows.length}</strong>${executiveVisual(g)}<small>${g.note}</small><b>عرض التفاصيل ←</b></button>`).join('')}</div>
  ${unknown?`<p class="overview-note">${unknown} خدمة قديمة بلا تاريخ إضافة مسجل، ولا تُحسب ضمن الخدمات الجديدة. تاريخ الإضافة للسجل ليس تاريخ إطلاق الخدمة.</p>`:''}
  ${selected?`<div class="overview-panel status-results" id="status-results" tabindex="-1"><div class="card-head"><h2>${selected.label} — ${selected.rows.length} خدمة</h2><button class="btn" data-action="overview" data-category="">إغلاق التفاصيل</button></div>${selected.rows.length?selected.rows.map(x=>`<div class="overview-row"><div><strong>${esc(x.service.name)} · ${esc(x.service.code||'بدون كود')}</strong><small>المالك: ${value(x.service.owner)} · البيئة: ${value(x.service.environment)}</small><small dir="auto">${esc(evidence(x))}</small></div><div class="status-links"><a class="btn" href="#/service/${encodeURIComponent(x.service.id)}">تفاصيل الخدمة</a><a class="link-btn" href="/architecture.html?service=${encodeURIComponent(x.service.id)}">Architecture ↗</a></div></div>`).join(''):'<p class="overview-empty">لا توجد خدمات مطابقة لهذا التصنيف.</p>'}</div>`:''}</section>`;
 }
