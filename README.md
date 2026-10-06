@@ -1,4 +1,4 @@
-# Technology Delivery & Architecture Portal
+# Technology Architecture Hub
 
 Internal service implementation records with servers, endpoints, load balancers and network connections. Arabic RTL UI with search across names, IPs, URLs and VIPs. **No database**: the API stores data in one Excel workbook (`data/services.xlsx`) with separate relational sheets. The workbook is generated on first use. Real data is ignored by Git and must never be committed to the public repository.
 
