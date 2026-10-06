@@ -7,7 +7,7 @@ import { readLegacyBuffer } from './legacy.js';
 const directory = path.resolve(process.env.DATA_DIR || './data');
 const file = path.join(directory, 'services.xlsx');
 const sheets = {
-  Services: ['id', 'name', 'code', 'customer', 'owner', 'status', 'environment', 'description', 'updatedAt', 'updatedBy', 'revision', 'createdAt'],
+  Services: ['id', 'name', 'code', 'customer', 'owner', 'status', 'environment', 'description', 'updatedAt', 'updatedBy', 'revision', 'createdAt', 'hostingLocations', 'hostingType', 'serverCount'],
   Servers: ['id', 'serviceId', 'name', 'environment', 'role', 'privateIp', 'publicIp', 'os', 'site', 'domain', 'cpu', 'ram', 'storage', 'notes'],
   Endpoints: ['id', 'serviceId', 'url', 'dns', 'vip', 'port', 'protocol', 'environment', 'publicIp', 'wafIp', 'notes'],
   LoadBalancers: ['id', 'serviceId', 'name', 'vip', 'pool', 'members', 'port', 'waf', 'hostIp', 'hostPort', 'hostProtocol', 'vipProtocol', 'publishType', 'certificate', 'notes'],
@@ -96,6 +96,9 @@ function validate(input) {
   const service = input.service;
   if (!service || !safe(service.name)) throw Object.assign(new Error('Service name is required'), { status: 400 });
   if (safe(service.name).length > 180) throw Object.assign(new Error('Service name is too long'), { status: 400 });
+  if(service.hostingLocations && String(service.hostingLocations).split(',').some(v=>!['GCP','NIC','SALAM'].includes(v.trim()))) throw Object.assign(new Error('Select valid hosting locations: GCP, NIC, SALAM.'),{status:400});
+  if(service.hostingType && !['OpenShift','VM'].includes(service.hostingType)) throw Object.assign(new Error('Select OpenShift or VM.'),{status:400});
+  if(service.serverCount!==undefined && service.serverCount!==null && service.serverCount!=='' && (!/^\d+$/.test(String(service.serverCount)) || !Number.isSafeInteger(Number(service.serverCount)))) throw Object.assign(new Error('Number of servers must be a non-negative whole number.'),{status:400});
   for (const name of children) {
     if (!Array.isArray(input[name]) || input[name].length > 300) throw Object.assign(new Error(`Section ${name} is invalid`), { status: 400 });
   }
