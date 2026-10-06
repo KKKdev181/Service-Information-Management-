@@ -92,12 +92,12 @@ async function save(book) {
   } finally { await fs.rm(temp, { force: true }); }
 }
 function validate(input) {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) throw Object.assign(new Error('بيانات الخدمة غير صحيحة'), { status: 400 });
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw Object.assign(new Error('Invalid service data'), { status: 400 });
   const service = input.service;
-  if (!service || !safe(service.name)) throw Object.assign(new Error('اسم الخدمة مطلوب'), { status: 400 });
-  if (safe(service.name).length > 180) throw Object.assign(new Error('اسم الخدمة طويل جدًا'), { status: 400 });
+  if (!service || !safe(service.name)) throw Object.assign(new Error('Service name is required'), { status: 400 });
+  if (safe(service.name).length > 180) throw Object.assign(new Error('Service name is too long'), { status: 400 });
   for (const name of children) {
-    if (!Array.isArray(input[name]) || input[name].length > 300) throw Object.assign(new Error(`قسم ${name} غير صحيح`), { status: 400 });
+    if (!Array.isArray(input[name]) || input[name].length > 300) throw Object.assign(new Error(`Section ${name} is invalid`), { status: 400 });
   }
 }
 function snapshot(book) {
@@ -111,11 +111,11 @@ export const upsert = (id, input) => serialize(async () => {
   const book = await readBook();
   const services = rows(book, 'Services');
   const existing = services.find(item => item.id === id);
-  if (id && !existing) throw Object.assign(new Error('الخدمة غير موجودة'), { status: 404 });
-  if (existing && Number(input.service.revision) !== Number(existing.revision)) throw Object.assign(new Error('تم تحديث الخدمة بواسطة شخص آخر. حدّث الصفحة قبل الحفظ.'), { status: 409 });
+  if (id && !existing) throw Object.assign(new Error('Service not found'), { status: 404 });
+  if (existing && Number(input.service.revision) !== Number(existing.revision)) throw Object.assign(new Error('This service was updated by someone else. Refresh the page before saving.'), { status: 409 });
   const serviceId = id || crypto.randomUUID();
   const record = Object.fromEntries(sheets.Services.map(key => [key, safe(input.service[key])]));
-  Object.assign(record, { id: serviceId, createdAt: existing ? (existing.createdAt || '') : new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: safe(input.updatedBy) || 'غير محدد', revision: String((Number(existing?.revision) || 0) + 1) });
+  Object.assign(record, { id: serviceId, createdAt: existing ? (existing.createdAt || '') : new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: safe(input.updatedBy) || 'Not specified', revision: String((Number(existing?.revision) || 0) + 1) });
   rewrite(book, 'Services', [...services.filter(item => item.id !== serviceId), record]);
   for (const name of children) {
     const kept = rows(book, name).filter(row => row.serviceId !== serviceId);
@@ -131,7 +131,7 @@ export const upsert = (id, input) => serialize(async () => {
 export const remove = id => serialize(async () => {
   const book = await readBook();
   const services = rows(book, 'Services');
-  if (!services.some(item => item.id === id)) throw Object.assign(new Error('الخدمة غير موجودة'), { status: 404 });
+  if (!services.some(item => item.id === id)) throw Object.assign(new Error('Service not found'), { status: 404 });
   rewrite(book, 'Services', services.filter(item => item.id !== id));
   for (const name of children) rewrite(book, name, rows(book, name).filter(item => item.serviceId !== id));
   await save(book);
@@ -142,25 +142,25 @@ export async function previewWorkbook(buffer, filename='') {
   catch(error) { if(error.status)throw error; /* Some simple workbooks are unsupported by ExcelJS streaming; use regular parsing below. */ }
   const book = new ExcelJS.Workbook();
   try { await book.xlsx.load(buffer); }
-  catch { throw Object.assign(new Error('تعذر قراءة الملف. اختر ملف Excel بصيغة xlsx.'), { status: 400 }); }
+  catch { throw Object.assign(new Error('Could not read the file. Choose an Excel in xlsx.'), { status: 400 }); }
   const imported={};
   for (const [name, columns] of Object.entries(sheets)) {
     const sheet = book.getWorksheet(name);
     if(!sheet && name==='Networks'){imported[name]=[];continue;}
     const headers=sheet && sheet.getRow(1).values.slice(1).map(String);
     if (!sheet || !headers.includes('id') || (name!=='Services' && !headers.includes('serviceId')) || (name==='Services' && !headers.includes('name')))
-      throw Object.assign(new Error('تنسيق الملف مختلف عن نموذج تصدير الموقع. نحتاج مثالًا من ملفاتك القديمة لإعداد تحويلها.'), { status: 400 });
+      throw Object.assign(new Error('The file format does not match the portal export template. A sample of the original template is needed to configure its import.'), { status: 400 });
     const parsed=[];
     sheet.eachRow((row,index)=>{if(index>1){const entry=Object.fromEntries(columns.map(key=>[key,headers.includes(key)?parseCell(row.getCell(headers.indexOf(key)+1).text):'']));if(entry.id)parsed.push(entry)}});
     imported[name]=parsed;
   }
   const records = imported.Services.map(service=>({service,...Object.fromEntries(children.map(name=>[name,imported[name].filter(row=>row.serviceId===service.id)]))}));
-  if (records.length > 1000) throw Object.assign(new Error('الملف يحتوي على أكثر من 1000 خدمة. قسّمه إلى ملفات أصغر.'), { status: 400 });
+  if (records.length > 1000) throw Object.assign(new Error('The file contains more than 1000 services. Split it into smaller files.'), { status: 400 });
   return records.map(item => ({ ...item, service: Object.fromEntries(sheets.Services.map(k => [k, item.service[k]])) }));
 }
 
 export const importRecords = items => serialize(async () => {
-  if (!Array.isArray(items) || items.length > 1000) throw Object.assign(new Error('عدد الخدمات غير صحيح'), { status: 400 });
+  if (!Array.isArray(items) || items.length > 1000) throw Object.assign(new Error('Invalid service count'), { status: 400 });
   const book = await readBook();
   const current = Object.fromEntries(Object.keys(sheets).map(name => [name, rows(book, name)]));
   const known = new Set(current.Services.map(s => `${safe(s.code).toLowerCase()}|${safe(s.name).toLowerCase()}`));
@@ -171,7 +171,7 @@ export const importRecords = items => serialize(async () => {
     const identity = `${code.toLowerCase()}|${name.toLowerCase()}`;
     if (known.has(identity)) { skipped++; continue; }
     const id = crypto.randomUUID();
-    current.Services.push({ ...Object.fromEntries(sheets.Services.map(key => [key, safe(item.service[key])])), id, name, code, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'استيراد Excel', revision: '1' });
+    current.Services.push({ ...Object.fromEntries(sheets.Services.map(key => [key, safe(item.service[key])])), id, name, code, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'Import Excel', revision: '1' });
     for (const section of children) {
       for (const row of item[section]) current[section].push({ ...Object.fromEntries(sheets[section].map(key => [key, safe(row[key])])), id: crypto.randomUUID(), serviceId: id });
     }
