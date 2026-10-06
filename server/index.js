@@ -1,5 +1,6 @@
 import { readArchitecture, saveArchitecture } from './architecture.js';
 import express from 'express';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { list, upsert, remove, workbookPath, previewWorkbook, importRecords } from './store.js';
@@ -18,6 +19,7 @@ app.get('/api/export', asyncRoute(async (req, res) => res.download(await workboo
 app.post('/api/import/preview', express.raw({ type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', limit: '12mb' }), asyncRoute(async (req, res) => res.json(await previewWorkbook(req.body, decodeURIComponent(req.get('X-Import-Filename') || '')))));
 app.post('/api/import/commit', asyncRoute(async (req, res) => res.json(await importRecords(req.body.records))));
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public');
+app.get('/vendor/elk.bundled.js', (req,res)=>res.sendFile(createRequire(import.meta.url).resolve('elkjs/lib/elk.bundled.js')));
 app.use(express.static(publicDir));
 app.get('/{*path}', (req, res) => res.sendFile(path.join(publicDir, 'index.html')));
 app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: err.status ? err.message : 'حدث خطأ أثناء معالجة الطلب' }); });
