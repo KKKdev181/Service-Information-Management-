@@ -1,3 +1,4 @@
+import {applyServerRules} from './server-rules.js';
 const lower = value => String(value ?? '').trim().toLowerCase();
 const pieces = value => String(value ?? '').split(/[\s,\u060c;·]+/).map(x => x.trim()).filter(Boolean);
 const ipPattern = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
@@ -37,6 +38,7 @@ export function inspectServices(services) {
   for (const record of services) {
     const s=record.service;
     const push=(kind,message)=>findings.push({serviceId:s.id,serviceName:s.name,kind,message});
+    for(const message of applyServerRules(structuredClone(record)).conflicts)push('review',message);
     if(!s.code)push('missing','CODE is not recorded');
     if(!(record.Servers||[]).length)push('missing','No servers recorded');
     if(!(record.Endpoints||[]).length)push('missing','No endpoints or publishing details recorded');
