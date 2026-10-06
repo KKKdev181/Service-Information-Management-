@@ -91,3 +91,15 @@ th,.detail-table th,.detail-table th:first-child{background:#1c2028;color:var(--
 .executive-title{color:#e5deee}.executive-card>strong{color:#f5efff}.executive-card:nth-child(2)>strong{color:#a5ead8}.executive-card:nth-child(3)>strong{color:#b5d0fa}.executive-card:nth-child(4)>strong{color:#efd1a3}
 .panel{box-shadow:0 8px 28px #00000020;border-color:#40394e}.btn.primary{background:#be9be8;border-color:#cbaaf2;box-shadow:0 3px 12px #b38bdd18}.executive-ring span{background:#1d202c}
 @media(prefers-reduced-motion:reduce){.executive-card{transition:none}.executive-card:hover{transform:none}}
+
+/* English interface */
+html[dir="ltr"] .brand strong,html[dir="ltr"] .eyebrow,html[dir="ltr"] table,html[dir="ltr"] .status-card{text-align:left}
+html[dir="ltr"] .sidebar{border-left:0;border-right:1px solid var(--line)}
+html[dir="ltr"] .nav-count{margin-right:0;margin-left:auto}
+html[dir="ltr"] .search span{right:auto;left:14px}
+html[dir="ltr"] .search input{padding:0 14px 0 40px}
+.brand{align-items:flex-start;gap:12px;padding-inline:4px}
+.brand .brand-mark{flex:none;width:48px;height:44px;background:transparent;border:0;box-shadow:none;border-radius:0}
+.brand-mark img{display:block;width:48px;height:40px;object-fit:contain}
+.brand strong{line-height:1.35}.brand small{display:block;font-size:11px;line-height:1.5;margin-top:5px}
+.head-buttons{flex-wrap:wrap}.page-head>div:first-child{min-width:0}
