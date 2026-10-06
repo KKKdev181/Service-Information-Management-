@@ -30,3 +30,16 @@ test('layout follows dependencies, preserves cycles and separates environments w
  for(const a of graph.nodes)for(const b of graph.nodes)if(a!==b)assert.ok(a.x+a.width<=b.x||b.x+b.width<=a.x||a.y+a.height<=b.y||b.y+b.height<=a.y);
 });
 test('validates and preserves zone and resized cards',()=>{const g=validateGraph({nodes:[{id:'n',x:1,y:2,width:420,height:220,zone:'DATA'}],edges:[]});assert.equal(g.nodes[0].width,420);assert.equal(g.nodes[0].zone,'DATA');});
+
+test('ELK routes a branching architecture in both directions and preserves editable routes', async()=>{
+ const {default:ELK}=await import('elkjs/lib/elk.bundled.js');
+ const {layoutArchitecture,routeSignature}=await import('../public/architecture-layout.js');
+ for(const direction of ['DOWN','RIGHT']){
+ const graph={nodes:['lb','vm1','vm2','db'].map(id=>({id,label:id,type:'Server',x:0,y:0})),edges:[['lb','vm1'],['lb','vm2'],['vm1','db'],['vm2','db']].map(([source,target],i)=>({id:'e'+i,source,target}))};
+ await layoutArchitecture(graph,direction,ELK);
+ const clean=validateGraph(graph);
+ for(const edge of clean.edges){assert.ok(edge.route.points.length>=2);assert.equal(edge.route.signature,routeSignature(clean,edge));}
+ for(const a of clean.nodes)for(const b of clean.nodes)if(a.id!==b.id)assert.ok(a.x+a.width<=b.x||b.x+b.width<=a.x||a.y+a.height<=b.y||b.y+b.height<=a.y);
+ const edge=clean.edges[0];clean.nodes[0].x+=20;assert.notEqual(edge.route.signature,routeSignature(clean,edge));
+ }
+});
