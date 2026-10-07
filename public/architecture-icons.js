@@ -32,5 +32,28 @@ const icons = {
  Backup:`${database}<path d="M47 31a12 12 0 1 1-11 8m0-8v8h8" fill="none" stroke="#d4e6ff" stroke-width="3"/>`,
  'DR Site':`<g transform="translate(-2,4) scale(.75)">${rack}</g><g transform="translate(27,16) scale(.6)">${rack}</g>`
 };
+// Strong silhouettes remain recognizable when a large diagram is zoomed out.
+icons['Load Balancer'] = `<circle cx="32" cy="30" r="24" fill="#123e4b" stroke="#55dfdf" stroke-width="2"/><path d="M32 12v12M32 24 17 39m15-15 15 15M32 24v23M12 34l5 5 5-5m20 0 5 5 5-5m-25 8 5 5 5-5" fill="none" stroke="#8cffff" stroke-width="3"/>`;
+icons.API = `<path d="m32 3 26 15v29L32 62 6 47V18Z" fill="#493621" stroke="#f0bc69" stroke-width="2"/><path d="m23 23-9 9 9 9m18-18 9 9-9 9m-5-22-8 26" fill="none" stroke="#ffda9e" stroke-width="3"/>`;
+icons.OpenShift = `<path d="M49 17a23 23 0 1 0 0 30" fill="none" stroke="#ff7e8a" stroke-width="10"/><path d="m41 11 15 10M41 53l15-10" stroke="#ffacb4" stroke-width="7"/><path d="M6 27h14M6 38h14" stroke="#832f43" stroke-width="5"/>`;
 const aliases={'Physical Server':'Server','Windows Server':'Server','Linux Server':'Server',Oracle:'Database','SQL Server':'Database',PostgreSQL:'Database',Redis:'Database','S3 / MinIO':'Storage','API Gateway':'API',DataPower:'API','3scale':'API',Apigee:'API',Proxy:'Router',Kafka:'Message Queue'};
 export function icon(type){return `<g stroke-linecap="round" stroke-linejoin="round">${icons[aliases[type]||type]||icons.Server}</g>`;}
+
+// Functional colors are shared by the diagram, overview and SVG export.
+const palette = {
+ Server:'#8fbaff', VM:'#bb9aff', 'Load Balancer':'#55dfdf', Database:'#68dfaa',
+ Firewall:'#ffae70', WAF:'#ffcf78', Storage:'#a6c975', API:'#f0bc69', DNS:'#77caff',
+ URL:'#89b9ff', OpenShift:'#ff7e8a', Kubernetes:'#779eff', Container:'#b39aff',
+ Docker:'#64cafa', External:'#a7b7cf', Cloud:'#8dceff', Internet:'#79d7ed',
+ 'External System':'#c6a6ec', Router:'#7edbcc', Switch:'#94c7da', VPN:'#e2c778',
+ NAT:'#edb88e', Monitoring:'#79dfba', User:'#e1b4ec', 'Message Queue':'#ecc777',
+ Backup:'#b9d99b', 'DR Site':'#9cbbec'
+};
+export function componentType(node) {
+ // Respect a configured type; only refine generic servers using recorded roles.
+ if (!['Server','Physical Server','VM'].includes(node.type)) return node.type;
+ const role = String(node.role || String(node.notes || '').match(/^role:\s*(.+)$/im)?.[1] || '');
+ if (node.architectureRole === 'Databases' || /\b(database|db|sql|oracle|postgresql)\b/i.test(role)) return 'Database';
+ return node.type;
+}
+export function componentColor(type) { return palette[aliases[type] || type] || '#a7b7cf'; }
