@@ -1,3 +1,4 @@
+import {icon} from './architecture-icons.js';
 import {inventorySignature} from './service-facts.js';
 import {openConnections} from './connection-manager.js';
 import {groupArchitecture,roles,roleFor,moveDiagramItem} from './architecture-groups.js';
@@ -8,6 +9,16 @@ $('type').innerHTML=types.map(t=>`<option>${esc(t)}</option>`).join('');
 const serviceId=new URLSearchParams(location.search).get('service');
 let record,graph={revision:0,nodes:[],edges:[]},selected=null,linkMode=false,linkSource=null,zoom=1,dirty=false,epoch=0,drag=null,ready=false;
 const grouped=true;
+let handTool=false,spacePan=false,pendingTarget=null;
+let history=[],historyIndex=-1;
+const snapshot=()=>JSON.stringify({nodes:graph.nodes,edges:graph.edges,positions:graph.positions||[],inventorySignature:graph.inventorySignature||''});
+function historyButtons(){$('undo').disabled=historyIndex<=0;$('redo').disabled=historyIndex>=history.length-1;}
+function remember(){const value=snapshot();if(history[historyIndex]!==value){history=history.slice(0,historyIndex+1);history.push(value);if(history.length>60)history.shift();historyIndex=history.length-1;}historyButtons();}
+function travelHistory(delta){if(!ready||gesture)return;const next=historyIndex+delta;if(next<0||next>=history.length)return;Object.assign(graph,JSON.parse(history[next]));historyIndex=next;epoch++;dirty=true;projection=null;selected=null;linkMode=false;linkSource=null;pendingTarget=null;status('Unsaved changes');historyButtons();draw();inspector();}
+$('undo').onclick=()=>travelHistory(-1);$('redo').onclick=()=>travelHistory(1);
+function setTool(hand){handTool=hand;stopConnecting();$('tool-select').classList.toggle('selected',!hand);$('tool-pan').classList.toggle('selected',hand);$('tool-select').setAttribute('aria-pressed',String(!hand));$('tool-pan').setAttribute('aria-pressed',String(hand));$('viewport').classList.toggle('hand-tool',hand);}
+$('tool-select').onclick=()=>setTool(false);$('tool-pan').onclick=()=>setTool(true);
+$('layout').onclick=()=>{if(!ready)return;graph.positions=[];changed();resetProjection();};
 let expanded=new Set(),projection=null,projectionEpoch=-1;
 function visibleGraph(){if(!grouped)return graph;if(!projection||projectionEpoch!==epoch){projection=groupArchitecture(graph,expanded);projectionEpoch=epoch;}return projection;}
 function resetProjection(){projection=null;selected=null;draw();fit();inspector();}
@@ -28,15 +39,16 @@ function connections(options={}){if(!ready)return;openConnections(graph,async ar
 $('connections-list').onclick=()=>connections({list:true});
 const colors={'Server':'#247654','Database':'#6558a5','Load Balancer':'#247f97','WAF':'#b07932','Firewall':'#b04f48','External':'#727e88','URL':'#43817d'};
 function status(message){$('state').textContent=message;}
-function changed(){dirty=true;epoch++;status('Unsaved changes');}
+function changed(){dirty=true;epoch++;remember();status('Unsaved changes');}
 async function request(url,options){const r=await fetch(url,options);const data=await r.json();if(!r.ok)throw Error(data.error||'Request failed');return data;}
 function dimensions(){return renderArchitecture(visibleGraph(),null,null);}
 function draw(){
  const stale=graph.revision&&graph.inventorySignature!==inventorySignature(record);$('inventory-notice').hidden=!stale;$('inventory-notice').textContent=stale?'Inventory has changed or this diagram has no inventory baseline. Review the current records, then use Generate from records if you want to replace this drawing.':'';
 
- $('hint').textContent=linkMode?(linkSource?'2. Click the destination item':'1. Click the source item'):'Drag item to move · Drag background to pan · Scroll to zoom';
+ $('hint').textContent=linkMode?(linkSource?'2. Click the destination item':'1. Click the source item'):'Drag shapes to move · Drag blue handles to connect · Space to pan';
  $('connect').textContent=linkMode?'Cancel connection':'Connect items';$('connect').classList.toggle('selected',linkMode);
  $('connect').setAttribute('aria-pressed',String(linkMode));
+ $('diagram-count').textContent=graph.nodes.length+' components · '+graph.edges.length+' connections';
  const {svg,w,h}=renderArchitecture(visibleGraph(),selected,linkSource);
  $('canvas').innerHTML=svg;applyCamera();
 }
@@ -81,8 +93,10 @@ $('canvas').addEventListener('pointerdown',e=>{
  const p=localPoint(e);pointers.set(e.pointerId,p);
  const target=e.target.closest('[data-node],[data-edge]');
  if(pointers.size===1)gesture={start:p,last:p,moved:false,target,button:e.button};
- else{gesture.moved=true;gesture.item=null;gesture.pinch=pinchState();}
- if(pointers.size===1&&!linkMode&&e.button===0&&target?.dataset.node){const n=visibleGraph().nodes.find(n=>n.id===target.dataset.node);if(n)gesture.item={id:n.id,x:n.x,y:n.y};}
+ else{gesture.moved=true;gesture.item=null;gesture.connector=null;$('connector-preview')?.remove();gesture.pinch=pinchState();}
+ const handle=e.target.closest('[data-connect-handle]');
+ if(pointers.size===1&&handle&&!handTool&&!spacePan&&e.button===0){gesture.connector=handle.dataset.connectHandle;gesture.item=null;}
+ if(pointers.size===1&&!handle&&!handTool&&!spacePan&&!linkMode&&e.button===0&&target?.dataset.node){const n=visibleGraph().nodes.find(n=>n.id===target.dataset.node);if(n)gesture.item={id:n.id,x:n.x,y:n.y};}
  $('canvas').setPointerCapture(e.pointerId);
 });
 $('canvas').addEventListener('pointermove',e=>{
@@ -95,7 +109,9 @@ $('canvas').addEventListener('pointermove',e=>{
  }else{
  if(!gesture.moved&&Math.hypot(p.x-gesture.start.x,p.y-gesture.start.y)<4)return;
  gesture.moved=true;
- if(gesture.item){
+ if(gesture.connector){
+ const n=visibleGraph().nodes.find(n=>n.id===gesture.connector);if(n){let preview=$('connector-preview');if(!preview){preview=document.createElementNS('http://www.w3.org/2000/svg','path');preview.id='connector-preview';preview.setAttribute('fill','none');preview.setAttribute('stroke','#86ccff');preview.setAttribute('stroke-width','3');preview.setAttribute('stroke-dasharray','7 5');preview.setAttribute('pointer-events','none');$('canvas').append(preview);}preview.setAttribute('d',`M${n.x+(n.width||224)/2} ${n.y+(n.height||116)/2} L${camera.x+p.x/zoom} ${camera.y+p.y/zoom}`);}
+ }else if(gesture.item){
  const n=gesture.item;moveDiagramItem(graph,visibleGraph(),n.id,n.x+(p.x-gesture.start.x)/zoom,n.y+(p.y-gesture.start.y)/zoom);
  gesture.itemMoved=true;selected={kind:'node',id:n.id};scheduleItemDraw();
  }else{camera.x-=(p.x-gesture.last.x)/zoom;camera.y-=(p.y-gesture.last.y)/zoom;scheduleCamera();}
@@ -107,8 +123,10 @@ function endPointer(e){
  pointers.delete(e.pointerId);
  if(pointers.size){gesture.last=[...pointers.values()][0];gesture.pinch=null;gesture.moved=true;return;}
  const done=gesture;gesture=null;$('viewport').classList.remove('is-panning');
+ $('connector-preview')?.remove();
+ if(done?.connector){if(e.type==='pointerup'){const target=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-node]')?.dataset.node;beginHandleConnection(done.connector,target&&target!==done.connector?target:null);}return;}
  if(done?.itemMoved){changed();draw();inspector();}
- if(e.type!=='pointerup'||done?.moved||done?.button!==0)return;
+ if(e.type!=='pointerup'||done?.moved||done?.button!==0||handTool||spacePan)return;
  if(done.target?.dataset.node)choose('node',done.target.dataset.node);
  else if(done.target?.dataset.edge)choose('edge',done.target.dataset.edge);
  else{selected=null;draw();inspector();}
@@ -120,6 +138,7 @@ $('viewport').addEventListener('wheel',e=>{
  zoomAt(zoom*Math.exp(-Math.max(-120,Math.min(120,delta))*.002),p.x,p.y);
 },{passive:false});
 $('canvas').addEventListener('keydown',e=>{
+ if(e.ctrlKey||e.metaKey)return;
  const target=e.target.closest('[data-node]');
  if(target&&(e.key==='Enter'||e.key===' ')){e.preventDefault();choose('node',target.dataset.node);return;}
  const step=60/zoom;
@@ -129,10 +148,25 @@ $('canvas').addEventListener('keydown',e=>{
  else if(e.key==='0'||e.key==='Home')fit();else return;
  e.preventDefault();scheduleCamera();
 });
-$('add').onclick=()=>{if(!ready)return;const type=$('type').value;const n={id:crypto.randomUUID(),type,label:type,ip:'',environment:'Not specified',notes:'',x:Math.round($('viewport').scrollLeft/zoom+60),y:Math.max(80,...graph.nodes.map(n=>n.y+(n.height||116)+80))};graph.nodes.push(n);changed();focusComponent(n.id);};
-function stopConnecting(){linkMode=false;linkSource=null;draw();inspector();}
+function addShape(type,point){
+ if(!ready)return;
+ const v=$('viewport'),id=crypto.randomUUID();
+ const x=Math.max(0,Math.round((point?.x??camera.x+v.clientWidth/zoom/2)-112)),y=Math.max(0,Math.round((point?.y??camera.y+v.clientHeight/zoom/2)-58));
+ graph.nodes.push({id,type,label:type,ip:'',environment:'Not specified',notes:'',x,y});
+ graph.positions=[...(graph.positions||[]),{id,x,y}];
+ const group=groupArchitecture(graph).membership.get(id);expanded.add(group.id);
+ linkMode=false;linkSource=null;projection=null;selected={kind:'node',id};changed();draw();inspector();
+}
+$('add').onclick=()=>addShape($('type').value);
+const shapeSections={'Compute':['VM','Server','OpenShift','Kubernetes','Container'],'Network & security':['Load Balancer','Firewall','WAF','DNS','VPN','Router'],'Data & integration':['Database','Storage','API','Message Queue','Cloud','User']};
+function renderPalette(){const query=$('shape-search').value.toLowerCase();$('shape-list').innerHTML=Object.entries(shapeSections).map(([title,items])=>{const found=items.filter(t=>t.toLowerCase().includes(query));return found.length?`<section class="shape-section"><h3>${title}</h3><div class="shape-grid">${found.map(type=>`<button class="shape-tile" draggable="true" data-shape="${type}" title="Drag or click to add ${type}"><svg viewBox="0 0 64 64" aria-hidden="true">${icon(type)}</svg><span>${type}</span></button>`).join('')}</div></section>`:'';}).join('')||'<p>No matching shapes. Try More components below.</p>';$('shape-list').querySelectorAll('[data-shape]').forEach(b=>{b.onclick=()=>addShape(b.dataset.shape);b.ondragstart=e=>{e.dataTransfer.setData('application/x-hub-shape',b.dataset.shape);e.dataTransfer.effectAllowed='copy';};});}
+$('shape-search').oninput=renderPalette;renderPalette();
+$('viewport').addEventListener('dragover',e=>{if([...e.dataTransfer.types].includes('application/x-hub-shape')){e.preventDefault();e.dataTransfer.dropEffect='copy';}});
+$('viewport').addEventListener('drop',e=>{const type=e.dataTransfer.getData('application/x-hub-shape');if(!types.includes(type))return;e.preventDefault();const p=localPoint(e);addShape(type,{x:camera.x+p.x/zoom,y:camera.y+p.y/zoom});});
+function beginHandleConnection(source,target){linkMode=true;linkSource=null;pendingTarget=target;draw();pickEndpoint(source);}
+function stopConnecting(){linkMode=false;linkSource=null;pendingTarget=null;if(ready){draw();inspector();}}
 function acceptEndpoint(id){
- if(!linkSource){linkSource=id;selected=null;draw();$('inspector').innerHTML=`<h2>Choose destination</h2><p>From: <strong>${esc(graph.nodes.find(n=>n.id===id)?.label)}</strong></p><p>Click the item traffic goes to. Drag or zoom to reach it.</p>`;return;}
+ if(!linkSource){linkSource=id;selected=null;draw();if(pendingTarget){const target=pendingTarget;pendingTarget=null;pickEndpoint(target);return;}$('inspector').innerHTML=`<h2>Choose destination</h2><p>From: <strong>${esc(graph.nodes.find(n=>n.id===id)?.label)}</strong></p><p>Click the item traffic goes to. Drag or zoom to reach it.</p>`;return;}
  if(id===linkSource){status('Choose a different destination component.');return;}
  const source=linkSource;stopConnecting();connections({source,target:id});
 }
@@ -144,7 +178,7 @@ function pickEndpoint(id){
  const render=()=>{const q=$('endpoint-filter').value.toLowerCase();$('endpoint-members').innerHTML=group.members.filter(n=>n.id!==linkSource&&[n.label,n.ip].join(' ').toLowerCase().includes(q)).map(n=>`<button class="group-member" data-endpoint="${esc(n.id)}"><strong>${esc(n.label)}</strong><span>${esc(n.ip||'No IP recorded')}</span></button>`).join('')||'<p>No matching components.</p>';$('endpoint-members').querySelectorAll('[data-endpoint]').forEach(b=>b.onclick=()=>acceptEndpoint(b.dataset.endpoint));};
  $('endpoint-filter').oninput=render;render();
 }
-$('connect').onclick=()=>{if(!ready)return;if(linkMode){stopConnecting();return;}linkMode=true;linkSource=null;selected=null;draw();$('inspector').innerHTML='<h2>Choose source</h2><p>Click the item where traffic starts, then click its destination. You can still drag and zoom.</p>';};
+$('connect').onclick=()=>{if(!ready)return;if(linkMode){stopConnecting();return;}handTool=false;spacePan=false;$('viewport').classList.remove('hand-tool');$('tool-pan').classList.remove('selected');$('tool-pan').setAttribute('aria-pressed','false');$('tool-select').classList.add('selected');$('tool-select').setAttribute('aria-pressed','true');linkMode=true;linkSource=null;pendingTarget=null;selected=null;draw();$('inspector').innerHTML='<h2>Choose source</h2><p>Click the item where traffic starts, then click its destination. You can still drag and zoom.</p>';};
 window.addEventListener('keydown',e=>{if(e.key==='Escape'&&linkMode)stopConnecting();});
 
 $('zoom-in').onclick=()=>zoomAt(zoom*1.2);$('zoom-out').onclick=()=>zoomAt(zoom/1.2);
@@ -152,4 +186,17 @@ $('generate').onclick=async()=>{if(!ready||!confirm('Replace the current diagram
 $('save').onclick=async()=>{if(!ready)return;const version=epoch;$('save').disabled=true;try{const saved=await request(`/api/services/${encodeURIComponent(serviceId)}/architecture`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(graph)});graph.revision=saved.revision;if(epoch===version){dirty=false;status('Diagram saved');}else status('Previous version saved; newer changes remain unsaved');}catch(e){status(e.message);}finally{$('save').disabled=false;}};
 $('export').onclick=()=>{if(!ready)return;const svg=$('canvas').cloneNode(true);const {w,h}=dimensions();svg.setAttribute('viewBox',`0 0 ${w} ${h}`);svg.setAttribute('width',w);svg.setAttribute('height',h);const blob=new Blob([new XMLSerializer().serializeToString(svg)],{type:'image/svg+xml;charset=utf-8'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='service-architecture.svg';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
-try{const records=await request('/api/services');record=records.find(x=>x.service.id===serviceId);if(!record)throw Error('Service not found');$('title').textContent='Architecture — '+record.service.name;$('back').href='/#/service/'+encodeURIComponent(serviceId);graph=await request(`/api/services/${encodeURIComponent(serviceId)}/architecture`);ready=true;if(!graph.revision){Object.assign(graph,generateArchitecture(record));changed();}else status('Saved diagram — Select a group to explore');draw();fit();inspector();}catch(e){status(e.message);}
+try{const records=await request('/api/services');record=records.find(x=>x.service.id===serviceId);if(!record)throw Error('Service not found');$('title').textContent='Architecture — '+record.service.name;$('back').href='/#/service/'+encodeURIComponent(serviceId);graph=await request(`/api/services/${encodeURIComponent(serviceId)}/architecture`);ready=true;if(!graph.revision){Object.assign(graph,generateArchitecture(record));changed();}else status('Saved diagram — Select a group to explore');remember();draw();fit();inspector();}catch(e){status(e.message);}
+
+window.addEventListener('keydown',e=>{
+ if(e.target.closest?.('input,textarea,select,[contenteditable="true"],dialog'))return;
+ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();travelHistory(e.shiftKey?1:-1);return;}
+ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();$('save').click();return;}
+ if(e.code==='Space'&&e.target===$('canvas')){e.preventDefault();spacePan=true;$('viewport').classList.add('hand-tool');}
+ if(!e.ctrlKey&&!e.metaKey&&e.key.toLowerCase()==='v')setTool(false);
+ if(!e.ctrlKey&&!e.metaKey&&e.key.toLowerCase()==='h')setTool(true);
+ if((e.key==='Delete'||e.key==='Backspace')&&selected&&$('delete')){e.preventDefault();$('delete').click();}
+});
+window.addEventListener('keyup',e=>{if(e.code==='Space'){spacePan=false;$('viewport').classList.toggle('hand-tool',handTool);}});
+window.addEventListener('blur',()=>{spacePan=false;$('viewport').classList.toggle('hand-tool',handTool);});
+$('canvas').addEventListener('dblclick',e=>{if(linkMode||handTool)return;const id=e.target.closest('[data-node]')?.dataset.node;if(!id)return;const group=visibleGraph().groups.find(g=>g.id===id);if(group){expanded.add(id);resetProjection();}else{choose('node',id);$('edit-label')?.focus();}});
