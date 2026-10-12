@@ -34,14 +34,32 @@ function dimensions(){return renderArchitecture(visibleGraph(),null,null);}
 function draw(){
  const stale=graph.revision&&graph.inventorySignature!==inventorySignature(record);$('inventory-notice').hidden=!stale;$('inventory-notice').textContent=stale?'Inventory has changed or this diagram has no inventory baseline. Review the current records, then use Generate from records if you want to replace this drawing.':'';
 
- $('hint').textContent='One diagram · Select a group to explore, a component to edit, or an arrow to inspect connections.';
+ $('hint').textContent='Drag to move · Scroll to zoom · Click for details';
  const {svg,w,h}=renderArchitecture(visibleGraph(),selected,linkSource);
- $('canvas').setAttribute('viewBox',`0 0 ${w} ${h}`);$('canvas').setAttribute('width',w*zoom);$('canvas').setAttribute('height',h*zoom);$('zoom-label').textContent=Math.round(zoom*100)+'%';$('canvas').innerHTML=svg;
+ $('canvas').innerHTML=svg;applyCamera();
 }
-function center(){const v=$('viewport');v.scrollTop=0;v.scrollLeft=Math.max(0,($('canvas').getBoundingClientRect().width-v.clientWidth)/2);}
-function fit(){const {w}=renderArchitecture(visibleGraph(),selected,linkSource);zoom=Math.max(.2,Math.min(1,($('viewport').clientWidth-48)/w));draw();center();}
-$('arrange').onclick=()=>{if(ready)resetProjection();};
+// Camera changes never alter inventory, diagram positions, or unsaved state.
+const camera={x:0,y:0};
+let cameraFrame=0;
+function applyCamera(){
+ const v=$('viewport'),c=$('canvas');
+ c.setAttribute('width','100%');c.setAttribute('height','100%');
+ c.setAttribute('viewBox',`${camera.x} ${camera.y} ${Math.max(1,v.clientWidth)/zoom} ${Math.max(1,v.clientHeight)/zoom}`);
+ $('zoom-label').textContent=Math.round(zoom*100)+'%';
+}
+function scheduleCamera(){if(!cameraFrame)cameraFrame=requestAnimationFrame(()=>{cameraFrame=0;applyCamera();});}
+function zoomAt(next,x=$('viewport').clientWidth/2,y=$('viewport').clientHeight/2){
+ next=Math.max(.02,Math.min(3,next));
+ camera.x+=x/zoom-x/next;camera.y+=y/zoom-y/next;zoom=next;scheduleCamera();
+}
+function fit(){
+ if(!ready)return;
+ const {w,h}=dimensions(),v=$('viewport');
+ zoom=Math.max(.02,Math.min(1,(v.clientWidth-48)/w,(v.clientHeight-48)/h));
+ camera.x=(w-v.clientWidth/zoom)/2;camera.y=(h-v.clientHeight/zoom)/2;applyCamera();
+}
 $('fit').onclick=fit;
+new ResizeObserver(()=>{if(ready)scheduleCamera();}).observe($('viewport'));
 function inspector(){if(!selected||selected.kind!=='node'||!graph.nodes.some(n=>n.id===selected.id)){groupInspector();return;}const item=selected&&(selected.kind==='node'?graph.nodes:graph.edges).find(x=>x.id===selected.id);if(!item){$('inspector').innerHTML='<h2>Diagram overview</h2><p>'+graph.nodes.length+' components · '+graph.edges.length+' recorded connections</p><p>Drag the corner handle to resize a component. Select a component to edit its type or zone.</p>'+graph.edges.map(e=>{const a=graph.nodes.find(n=>n.id===e.source),b=graph.nodes.find(n=>n.id===e.target);return `<p dir="ltr">${esc(a?.label)} → ${esc(b?.label)}<br><b>${esc([e.type,e.protocol,e.port].filter(Boolean).join(' · '))}</b></p>`;}).join('')+'<h2>Unconnected components</h2>'+graph.nodes.filter(n=>!graph.edges.some(e=>e.source===n.id||e.target===n.id)).map(n=>`<p>${esc(n.label)} — Relationship requires confirmation</p>`).join('');return;}
  const node=selected.kind==='node';const fields=node?[['label','Component name'],['type','Component type / Icon'],['architectureRole','Architecture role'],['zone','Zone / Group'],['ip','IP / Address'],['environment','Environment'],['notes','Notes']]:[['source','Source'],['target','Destination'],['type','Connection type (NAT / GSN / VPN…)'],['protocol','Protocol'],['port','Port'],['notes','Notes']];
  $('inspector').innerHTML=`<h2>${node?'Component details':'Connection details'}</h2>`+fields.map(([key,label])=>`<label for="edit-${key}">${label}</label>${node&&['type','zone','architectureRole'].includes(key)?`<select id="edit-${key}">${(key==='type'?types:key==='architectureRole'?roles:zones).map(v=>`<option ${(item[key]||(key==='zone'?zoneFor(item):key==='architectureRole'?roleFor(item):''))===v?'selected':''}>${esc(v)}</option>`).join('')}</select>`:key==='environment'?`<select id="edit-${key}">${environments.map(env=>`<option ${item[key]===env?'selected':''}>${esc(env)}</option>`).join('')}</select>`:['source','target'].includes(key)?`<select id="edit-${key}">${graph.nodes.map(n=>`<option value="${esc(n.id)}" ${item[key]===n.id?'selected':''}>${esc(n.label)}</option>`).join('')}</select>`:key==='notes'?`<textarea id="edit-${key}">${esc(item[key])}</textarea>`:`<input id="edit-${key}" value="${esc(item[key])}" maxlength="1000">`}`).join('')+(node?'':'<button id="reverse" class="btn">Reverse direction</button>')+'<button id="apply" class="btn primary">Apply changes</button><button id="delete" class="btn danger">Remove from diagram</button>';
@@ -51,18 +69,62 @@ function inspector(){if(!selected||selected.kind!=='node'||!graph.nodes.some(n=>
  $('delete').onclick=()=>{if(!confirm('Delete the selected component or connection from this diagram?'))return;if(node){graph.nodes=graph.nodes.filter(n=>n.id!==item.id);graph.edges=graph.edges.filter(e=>e.source!==item.id&&e.target!==item.id);}else graph.edges=graph.edges.filter(e=>e.id!==item.id);selected=null;changed();draw();inspector();};
 }
 function choose(kind,id){selected={kind,id};draw();inspector();if(kind==='edge'&&!grouped)connections({edgeId:id});}
+const pointers=new Map();let gesture=null;
+const localPoint=e=>{const r=$('viewport').getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top};};
+function pinchState(){const [a,b]=[...pointers.values()];return {x:(a.x+b.x)/2,y:(a.y+b.y)/2,d:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y))};}
 $('canvas').addEventListener('pointerdown',e=>{
- const node=e.target.closest('[data-node]'),edge=e.target.closest('[data-edge]');
- if(node)choose('node',node.dataset.node);
- else if(edge)choose('edge',edge.dataset.edge);
- else{selected=null;draw();inspector();}
+ if(!ready||![0,1].includes(e.button))return;
+ e.preventDefault();$('canvas').focus({preventScroll:true});
+ const p=localPoint(e);pointers.set(e.pointerId,p);
+ const target=e.target.closest('[data-node],[data-edge]');
+ if(pointers.size===1)gesture={start:p,last:p,moved:false,target,button:e.button};
+ else{gesture.moved=true;gesture.pinch=pinchState();}
+ $('canvas').setPointerCapture(e.pointerId);
 });
-$('canvas').addEventListener('keydown',e=>{const target=e.target.closest('[data-node]');if(target&&e.key==='Enter')choose('node',target.dataset.node);});
+$('canvas').addEventListener('pointermove',e=>{
+ if(!pointers.has(e.pointerId)||!gesture)return;
+ const p=localPoint(e);pointers.set(e.pointerId,p);
+ if(pointers.size>1){
+ const now=pinchState(),prev=gesture.pinch||now;
+ camera.x+=(prev.x-now.x)/zoom;camera.y+=(prev.y-now.y)/zoom;
+ zoomAt(zoom*now.d/prev.d,now.x,now.y);gesture.pinch=now;gesture.moved=true;
+ }else{
+ if(!gesture.moved&&Math.hypot(p.x-gesture.start.x,p.y-gesture.start.y)<4)return;
+ gesture.moved=true;camera.x-=(p.x-gesture.last.x)/zoom;camera.y-=(p.y-gesture.last.y)/zoom;scheduleCamera();
+ }
+ gesture.last=p;$('viewport').classList.add('is-panning');
+});
+function endPointer(e){
+ if(!pointers.has(e.pointerId))return;
+ pointers.delete(e.pointerId);
+ if(pointers.size){gesture.last=[...pointers.values()][0];gesture.pinch=null;gesture.moved=true;return;}
+ const done=gesture;gesture=null;$('viewport').classList.remove('is-panning');
+ if(e.type!=='pointerup'||done?.moved||done?.button!==0)return;
+ if(done.target?.dataset.node)choose('node',done.target.dataset.node);
+ else if(done.target?.dataset.edge)choose('edge',done.target.dataset.edge);
+ else{selected=null;draw();inspector();}
+}
+for(const event of ['pointerup','pointercancel','lostpointercapture'])$('canvas').addEventListener(event,endPointer);
+$('viewport').addEventListener('wheel',e=>{
+ if(!ready)return;e.preventDefault();const p=localPoint(e);
+ const delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?$('viewport').clientHeight:1);
+ zoomAt(zoom*Math.exp(-Math.max(-120,Math.min(120,delta))*.002),p.x,p.y);
+},{passive:false});
+$('canvas').addEventListener('keydown',e=>{
+ const target=e.target.closest('[data-node]');
+ if(target&&(e.key==='Enter'||e.key===' ')){e.preventDefault();choose('node',target.dataset.node);return;}
+ const step=60/zoom;
+ if(e.key==='ArrowLeft')camera.x-=step;else if(e.key==='ArrowRight')camera.x+=step;
+ else if(e.key==='ArrowUp')camera.y-=step;else if(e.key==='ArrowDown')camera.y+=step;
+ else if(e.key==='+'||e.key==='=')zoomAt(zoom*1.2);else if(e.key==='-')zoomAt(zoom/1.2);
+ else if(e.key==='0'||e.key==='Home')fit();else return;
+ e.preventDefault();scheduleCamera();
+});
 $('add').onclick=()=>{if(!ready)return;const type=$('type').value;const n={id:crypto.randomUUID(),type,label:type,ip:'',environment:'Not specified',notes:'',x:Math.round($('viewport').scrollLeft/zoom+60),y:Math.max(80,...graph.nodes.map(n=>n.y+(n.height||116)+80))};graph.nodes.push(n);changed();focusComponent(n.id);};
 $('connect').onclick=()=>connections({source:selected?.kind==='node'&&graph.nodes.some(n=>n.id===selected.id)?selected.id:''});
-$('zoom-in').onclick=()=>{zoom=Math.min(1.8,zoom+.15);draw();};$('zoom-out').onclick=()=>{zoom=Math.max(.35,zoom-.15);draw();};
-$('generate').onclick=async()=>{if(!ready||!confirm('Replace the current diagram with one generated from service records?'))return;Object.assign(graph,generateArchitecture(record));selected=null;changed();fit();inspector();await $('arrange').onclick();};
+$('zoom-in').onclick=()=>zoomAt(zoom*1.2);$('zoom-out').onclick=()=>zoomAt(zoom/1.2);
+$('generate').onclick=async()=>{if(!ready||!confirm('Replace the current diagram with one generated from service records?'))return;Object.assign(graph,generateArchitecture(record));selected=null;changed();fit();inspector();};
 $('save').onclick=async()=>{if(!ready)return;const version=epoch;$('save').disabled=true;try{const saved=await request(`/api/services/${encodeURIComponent(serviceId)}/architecture`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(graph)});graph.revision=saved.revision;if(epoch===version){dirty=false;status('Diagram saved');}else status('Previous version saved; newer changes remain unsaved');}catch(e){status(e.message);}finally{$('save').disabled=false;}};
-$('export').onclick=()=>{if(!ready)return;const svg=$('canvas').cloneNode(true);const {w,h}=dimensions();svg.setAttribute('width',w);svg.setAttribute('height',h);const blob=new Blob([new XMLSerializer().serializeToString(svg)],{type:'image/svg+xml;charset=utf-8'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='service-architecture.svg';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+$('export').onclick=()=>{if(!ready)return;const svg=$('canvas').cloneNode(true);const {w,h}=dimensions();svg.setAttribute('viewBox',`0 0 ${w} ${h}`);svg.setAttribute('width',w);svg.setAttribute('height',h);const blob=new Blob([new XMLSerializer().serializeToString(svg)],{type:'image/svg+xml;charset=utf-8'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='service-architecture.svg';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
 try{const records=await request('/api/services');record=records.find(x=>x.service.id===serviceId);if(!record)throw Error('Service not found');$('title').textContent='Architecture — '+record.service.name;$('back').href='/#/service/'+encodeURIComponent(serviceId);graph=await request(`/api/services/${encodeURIComponent(serviceId)}/architecture`);ready=true;if(!graph.revision){Object.assign(graph,generateArchitecture(record));changed();}else status('Saved diagram — Select a group to explore');draw();fit();inspector();}catch(e){status(e.message);}
