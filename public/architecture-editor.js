@@ -32,7 +32,7 @@ function groupInspector(){
  const view=visibleGraph();const node=selected?.kind==='node'&&view.nodes.find(n=>n.id===selected.id),edge=selected?.kind==='edge'&&view.edges.find(e=>e.id===selected.id);
  const group=node&&view.groups.find(g=>g.id===(node.groupId||node.id));
  if(group){$('inspector').innerHTML=`<h2>${esc(group.role)}</h2><p>${esc(group.environment)} · ${group.members.length} components</p><button class="btn primary" id="expand-group">${expanded.has(group.id)?'Collapse group':'Expand in diagram'}</button><p>${group.internal.length} recorded connections within this group</p>`+group.members.map(n=>`<button class="group-member" data-member="${esc(n.id)}"><strong>${esc(n.label)}</strong><span>${esc(n.type)} · ${esc(n.ip||'No IP recorded')}</span><small>View / edit component →</small></button>`).join('');$('expand-group').onclick=()=>{expanded.has(group.id)?expanded.delete(group.id):expanded.add(group.id);resetProjection();};$('inspector').querySelectorAll('[data-member]').forEach(b=>b.onclick=()=>{focusComponent(b.dataset.member);});return;}
- if(edge){$('inspector').innerHTML='<h2>Recorded connections</h2><p>Each entry below is an existing component-level connection.</p>'+edge.members.map(e=>{const a=graph.nodes.find(n=>n.id===e.source),b=graph.nodes.find(n=>n.id===e.target);return `<button class="group-member" data-connection="${esc(e.id)}"><strong>${esc(a?.label)} → ${esc(b?.label)}</strong><span>${esc([e.type,e.protocol,e.port].filter(Boolean).join(' · '))}</span><small>View / edit connection →</small></button>`;}).join('');$('inspector').querySelectorAll('[data-connection]').forEach(b=>b.onclick=()=>{connections({edgeId:b.dataset.connection});});return;}
+ if(edge){$('inspector').innerHTML='<h2>Selected connection</h2><button id="delete-line" class="btn danger">Delete selected line</button><p>This line represents '+edge.members.length+' connection(s). Press Delete to remove it, or select an entry below to edit one connection.</p>'+edge.members.map(e=>{const a=graph.nodes.find(n=>n.id===e.source),b=graph.nodes.find(n=>n.id===e.target);return `<button class="group-member" data-connection="${esc(e.id)}"><strong>${esc(a?.label)} → ${esc(b?.label)}</strong><span>${esc([e.type,e.protocol,e.port].filter(Boolean).join(' · '))}</span><small>View / edit connection →</small></button>`;}).join('');$('delete-line').onclick=deleteSelectedLine;$('inspector').querySelectorAll('[data-connection]').forEach(b=>b.onclick=()=>{connections({edgeId:b.dataset.connection});});return;}
  $('inspector').innerHTML=`<h2>Architecture overview</h2><p>${view.groups.length} groups · ${graph.nodes.length} components · ${graph.edges.length} recorded connections</p><p>Select a group to see its component list, or an arrow to inspect its recorded connections.</p><p>Groups are separated by environment. Unassigned components need a role; select a component and set Architecture role.</p><p>Expand only the group you need. Select a component to edit it here; select an arrow to inspect connections.</p>`;
 }
 function connections(options={}){if(!ready)return;openConnections(graph,async arrange=>{selected=null;changed();draw();inspector();if(arrange)resetProjection();else fit();},options);}
@@ -83,6 +83,25 @@ function inspector(){if(!selected||selected.kind!=='node'||!graph.nodes.some(n=>
  $('apply').onclick=()=>{const values=Object.fromEntries(fields.map(([key])=>[key,$('edit-'+key).value.trim()]));if(node&&!values.label)return status('Component name is required');if(!node&&values.source===values.target)return status('Choose different source and destination components');Object.assign(item,values);changed();focusComponent(item.id);};
  $('delete').onclick=()=>{if(!confirm('Delete the selected component or connection from this diagram?'))return;if(node){graph.nodes=graph.nodes.filter(n=>n.id!==item.id);graph.edges=graph.edges.filter(e=>e.source!==item.id&&e.target!==item.id);}else graph.edges=graph.edges.filter(e=>e.id!==item.id);selected=null;changed();draw();inspector();};
 }
+function deleteSelectedLine(){
+ if(selected?.kind!=='edge')return;
+ const edge=visibleGraph().edges.find(e=>e.id===selected.id);if(!edge)return;
+ const ids=new Set((edge.members||[edge]).map(e=>e.id));
+ if(!confirm(`Delete this line and its ${ids.size} recorded connection(s)? Components will remain.`))return;
+ graph.edges=graph.edges.filter(e=>!ids.has(e.id));selected=null;changed();draw();inspector();
+}
+function dropNodeAt(e,source){
+ const v=$('viewport').getBoundingClientRect(),p=localPoint(e);
+ if(p.x<0||p.y<0||p.x>$('viewport').clientWidth||p.y>$('viewport').clientHeight)return null;
+ const x=camera.x+p.x/zoom,y=camera.y+p.y/zoom,tolerance=16/zoom;
+ // Geometry hit-testing works even when a line or zone label covers the target.
+ return visibleGraph().nodes.filter(n=>n.id!==source&&x>=n.x-tolerance&&x<=n.x+(n.width||224)+tolerance&&y>=n.y-tolerance&&y<=n.y+(n.height||116)+tolerance).sort((a,b)=>Math.hypot(x-a.x-(a.width||224)/2,y-a.y-(a.height||116)/2)-Math.hypot(x-b.x-(b.width||224)/2,y-b.y-(b.height||116)/2))[0]?.id||null;
+}
+function connectDroppedItems(sourceId,targetId){
+ const view=visibleGraph(),members=id=>graph.nodes.some(n=>n.id===id)?[id]:(view.groups.find(g=>g.id===id)?.members||[]).map(n=>n.id);
+ const sources=members(sourceId),targets=members(targetId);if(!sources.length||!targets.length)return;
+ stopConnecting();connections({source:sources.length===1?sources[0]:'',target:targets.length===1?targets[0]:'',sourceChoices:sources,targetChoices:targets});
+}
 function choose(kind,id){if(linkMode&&kind==='node'){pickEndpoint(id);return;}selected={kind,id};draw();inspector();if(kind==='edge'&&!grouped)connections({edgeId:id});}
 const pointers=new Map();let gesture=null;
 const localPoint=e=>{const r=$('viewport').getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top};};
@@ -124,7 +143,7 @@ function endPointer(e){
  if(pointers.size){gesture.last=[...pointers.values()][0];gesture.pinch=null;gesture.moved=true;return;}
  const done=gesture;gesture=null;$('viewport').classList.remove('is-panning');
  $('connector-preview')?.remove();
- if(done?.connector){if(e.type==='pointerup'){const target=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-node]')?.dataset.node;beginHandleConnection(done.connector,target&&target!==done.connector?target:null);}return;}
+ if(done?.connector){if(e.type==='pointerup'){const target=dropNodeAt(e,done.connector);if(target)connectDroppedItems(done.connector,target);else beginHandleConnection(done.connector,null);}return;}
  if(done?.itemMoved){changed();draw();inspector();}
  if(e.type!=='pointerup'||done?.moved||done?.button!==0||handTool||spacePan)return;
  if(done.target?.dataset.node)choose('node',done.target.dataset.node);
@@ -195,7 +214,7 @@ window.addEventListener('keydown',e=>{
  if(e.code==='Space'&&e.target===$('canvas')){e.preventDefault();spacePan=true;$('viewport').classList.add('hand-tool');}
  if(!e.ctrlKey&&!e.metaKey&&e.key.toLowerCase()==='v')setTool(false);
  if(!e.ctrlKey&&!e.metaKey&&e.key.toLowerCase()==='h')setTool(true);
- if((e.key==='Delete'||e.key==='Backspace')&&selected&&$('delete')){e.preventDefault();$('delete').click();}
+ if((e.key==='Delete'||e.key==='Backspace')&&selected){if(selected.kind==='edge'){e.preventDefault();deleteSelectedLine();}else if($('delete')){e.preventDefault();$('delete').click();}}
 });
 window.addEventListener('keyup',e=>{if(e.code==='Space'){spacePan=false;$('viewport').classList.toggle('hand-tool',handTool);}});
 window.addEventListener('blur',()=>{spacePan=false;$('viewport').classList.toggle('hand-tool',handTool);});
