@@ -1,6 +1,6 @@
 import {inventorySignature} from './service-facts.js';
 import {openConnections} from './connection-manager.js';
-import {groupArchitecture,roles,roleFor} from './architecture-groups.js';
+import {groupArchitecture,roles,roleFor,moveDiagramItem} from './architecture-groups.js';
 import {arrangeArchitecture,renderArchitecture,types,zones,zoneFor} from './architecture-view.js';
 import {generateArchitecture,environments} from './architecture-model.js';
 const $=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -34,7 +34,7 @@ function dimensions(){return renderArchitecture(visibleGraph(),null,null);}
 function draw(){
  const stale=graph.revision&&graph.inventorySignature!==inventorySignature(record);$('inventory-notice').hidden=!stale;$('inventory-notice').textContent=stale?'Inventory has changed or this diagram has no inventory baseline. Review the current records, then use Generate from records if you want to replace this drawing.':'';
 
- $('hint').textContent=linkMode?(linkSource?'2. Click the destination item':'1. Click the source item'):'Drag to move · Scroll to zoom · Click for details';
+ $('hint').textContent=linkMode?(linkSource?'2. Click the destination item':'1. Click the source item'):'Drag item to move · Drag background to pan · Scroll to zoom';
  $('connect').textContent=linkMode?'Cancel connection':'Connect items';$('connect').classList.toggle('selected',linkMode);
  $('connect').setAttribute('aria-pressed',String(linkMode));
  const {svg,w,h}=renderArchitecture(visibleGraph(),selected,linkSource);
@@ -42,7 +42,8 @@ function draw(){
 }
 // Camera changes never alter inventory, diagram positions, or unsaved state.
 const camera={x:0,y:0};
-let cameraFrame=0;
+let cameraFrame=0,itemFrame=0;
+function scheduleItemDraw(){if(!itemFrame)itemFrame=requestAnimationFrame(()=>{itemFrame=0;draw();});}
 function applyCamera(){
  const v=$('viewport'),c=$('canvas');
  c.setAttribute('width','100%');c.setAttribute('height','100%');
@@ -80,7 +81,8 @@ $('canvas').addEventListener('pointerdown',e=>{
  const p=localPoint(e);pointers.set(e.pointerId,p);
  const target=e.target.closest('[data-node],[data-edge]');
  if(pointers.size===1)gesture={start:p,last:p,moved:false,target,button:e.button};
- else{gesture.moved=true;gesture.pinch=pinchState();}
+ else{gesture.moved=true;gesture.item=null;gesture.pinch=pinchState();}
+ if(pointers.size===1&&!linkMode&&e.button===0&&target?.dataset.node){const n=visibleGraph().nodes.find(n=>n.id===target.dataset.node);if(n)gesture.item={id:n.id,x:n.x,y:n.y};}
  $('canvas').setPointerCapture(e.pointerId);
 });
 $('canvas').addEventListener('pointermove',e=>{
@@ -92,7 +94,11 @@ $('canvas').addEventListener('pointermove',e=>{
  zoomAt(zoom*now.d/prev.d,now.x,now.y);gesture.pinch=now;gesture.moved=true;
  }else{
  if(!gesture.moved&&Math.hypot(p.x-gesture.start.x,p.y-gesture.start.y)<4)return;
- gesture.moved=true;camera.x-=(p.x-gesture.last.x)/zoom;camera.y-=(p.y-gesture.last.y)/zoom;scheduleCamera();
+ gesture.moved=true;
+ if(gesture.item){
+ const n=gesture.item;moveDiagramItem(graph,visibleGraph(),n.id,n.x+(p.x-gesture.start.x)/zoom,n.y+(p.y-gesture.start.y)/zoom);
+ gesture.itemMoved=true;selected={kind:'node',id:n.id};scheduleItemDraw();
+ }else{camera.x-=(p.x-gesture.last.x)/zoom;camera.y-=(p.y-gesture.last.y)/zoom;scheduleCamera();}
  }
  gesture.last=p;$('viewport').classList.add('is-panning');
 });
@@ -101,6 +107,7 @@ function endPointer(e){
  pointers.delete(e.pointerId);
  if(pointers.size){gesture.last=[...pointers.values()][0];gesture.pinch=null;gesture.moved=true;return;}
  const done=gesture;gesture=null;$('viewport').classList.remove('is-panning');
+ if(done?.itemMoved){changed();draw();inspector();}
  if(e.type!=='pointerup'||done?.moved||done?.button!==0)return;
  if(done.target?.dataset.node)choose('node',done.target.dataset.node);
  else if(done.target?.dataset.edge)choose('edge',done.target.dataset.edge);
@@ -141,7 +148,7 @@ $('connect').onclick=()=>{if(!ready)return;if(linkMode){stopConnecting();return;
 window.addEventListener('keydown',e=>{if(e.key==='Escape'&&linkMode)stopConnecting();});
 
 $('zoom-in').onclick=()=>zoomAt(zoom*1.2);$('zoom-out').onclick=()=>zoomAt(zoom/1.2);
-$('generate').onclick=async()=>{if(!ready||!confirm('Replace the current diagram with one generated from service records?'))return;Object.assign(graph,generateArchitecture(record));selected=null;changed();fit();inspector();};
+$('generate').onclick=async()=>{if(!ready||!confirm('Replace the current diagram with one generated from service records?'))return;Object.assign(graph,generateArchitecture(record),{positions:[]});expanded.clear();selected=null;changed();draw();fit();inspector();};
 $('save').onclick=async()=>{if(!ready)return;const version=epoch;$('save').disabled=true;try{const saved=await request(`/api/services/${encodeURIComponent(serviceId)}/architecture`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(graph)});graph.revision=saved.revision;if(epoch===version){dirty=false;status('Diagram saved');}else status('Previous version saved; newer changes remain unsaved');}catch(e){status(e.message);}finally{$('save').disabled=false;}};
 $('export').onclick=()=>{if(!ready)return;const svg=$('canvas').cloneNode(true);const {w,h}=dimensions();svg.setAttribute('viewBox',`0 0 ${w} ${h}`);svg.setAttribute('width',w);svg.setAttribute('height',h);const blob=new Blob([new XMLSerializer().serializeToString(svg)],{type:'image/svg+xml;charset=utf-8'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='service-architecture.svg';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
