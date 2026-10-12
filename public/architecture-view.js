@@ -41,7 +41,7 @@ export function renderArchitecture(graph,selected,linkSource){
  }
  const lookup=new Map(graph.nodes.map(n=>[n.id,n]));const linked=new Set(selected?.kind==='node'?graph.edges.filter(e=>e.source===selected.id||e.target===selected.id).flatMap(e=>[e.source,e.target]):[]);
  const w=Math.max(360,...graph.nodes.map(n=>n.x+(n.width||W)+65)),h=Math.max(650,...graph.nodes.map(n=>n.y+(n.height||H)+90));
- let svg='<defs><marker id="arrow" viewBox="0 0 12 12" markerWidth="7" markerHeight="7" refX="11" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M1 1 L11 6 L1 11 L3 6Z" fill="#80e9ef"/></marker></defs><rect width="100%" height="100%" fill="#101217"/>';
+ let svg='<defs><marker id="arrow" viewBox="0 0 12 12" markerWidth="7" markerHeight="7" refX="11" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M1 1 L11 6 L1 11 L3 6Z" fill="#80e9ef"/></marker></defs><rect width="100%" height="100%" fill="#101217" opacity="0"/>';
  const groups=new Map();for(const n of graph.nodes){const key=(n.environment||'Not specified')+' · '+zoneFor(n);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(n);}
  // Separate contiguous regions so a zone never encloses unrelated intervening nodes.
  for(const [key,group] of groups){const columns=new Map();for(const n of group){if(!columns.has(n.x))columns.set(n.x,[]);columns.get(n.x).push(n);}for(const col of columns.values()){col.sort((a,b)=>a.y-b.y);let runs=[];for(const n of col){const run=runs.at(-1);if(run&&n.y-(run.at(-1).y+(run.at(-1).height||H))<100)run.push(n);else runs.push([n]);}for(const run of runs){const x=run[0].x-18,y=run[0].y-38,bottom=Math.max(...run.map(n=>n.y+(n.height||H))),width=Math.max(...run.map(n=>n.width||W))+36;svg+=`<rect x="${x}" y="${y}" width="${width}" height="${bottom-y+18}" rx="12" fill="${run.length>1?'#161a21':'none'}" stroke="${run.length>1?'#363e4b':'none'}" stroke-dasharray="3 5"/><text x="${x+9}" y="${y+20}" font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="12" fill="#c8d8e8">${esc(key)}</text>`;}}}
@@ -68,7 +68,7 @@ export function renderArchitecture(graph,selected,linkSource){
  const nw=n.width||W,nh=n.height||H,type=componentType(n),color=componentColor(type);
  const active=selected?.id===n.id||linkSource===n.id;
  // Transparent hit area preserves dragging; the equipment is the visible silhouette.
- return `<g class="arch-node" data-node="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(type+': '+n.label)}" transform="translate(${n.x},${n.y})" opacity="${selected?.kind==='node'&&!active&&!linked.has(n.id)?.65:1}">
+ return `<g class="arch-node ${active?'is-selected':''}" data-node="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(type+': '+n.label)}" transform="translate(${n.x},${n.y})" opacity="${selected?.kind==='node'&&!active&&!linked.has(n.id)?.65:1}">
  <rect width="${nw}" height="${nh}" rx="10" fill="none" pointer-events="all" stroke="${active?'#f0e4ff':'none'}" stroke-width="2" stroke-dasharray="${active?'5 4':'none'}"/>
  <g transform="translate(4,0) scale(1.13)">${icon(type)}</g>
  <text x="82" y="27" font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="15" font-weight="600" fill="${color}">${esc(type)}</text>
@@ -77,6 +77,7 @@ export function renderArchitecture(graph,selected,linkSource){
  <text x="${nw/2}" y="85" text-anchor="middle" font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="16" font-weight="600" fill="#f1f5f9">${esc(n.label.length>Math.floor(nw/8.5)?n.label.slice(0,Math.floor(nw/8.5)-1)+'…':n.label)}</text>
  <text x="${nw/2}" y="106" text-anchor="middle" font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="14" fill="#c8d5e6">${esc((n.ip||'').slice(0,Math.floor(nw/8)))}</text>
  ${n.groupId?'':`<path data-resize="true" d="M${nw-12} ${nh-3}h9v-9" stroke="${color}" stroke-width="3" fill="none" style="cursor:nwse-resize"/>`}
+ ${[[nw/2,0],[nw,nh/2],[nw/2,nh],[0,nh/2]].map(([x,y])=>`<g class="connection-handle" data-connect-handle="${esc(n.id)}" transform="translate(${x},${y})"><circle r="12" fill="#10263d" stroke="#78c8ff" stroke-width="2"/><path d="M-5 0h10M0-5v10" stroke="#bde9ff" stroke-width="2"/><title>Drag to connect</title></g>`).join('')}
  <title>${esc(type+' · '+n.label+' '+(n.ip||''))}</title></g>`;
  }).join('');
  svg+=labelMarkup.join('');
