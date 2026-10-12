@@ -29,5 +29,18 @@ export function groupArchitecture(graph,expanded=new Set()){
  const key=JSON.stringify([source,target]);let edge=pairs.get(key);if(!edge){edge={id:'aggregate:'+key,source,target,type:'',members:[]};pairs.set(key,edge);edges.push(edge);}edge.members.push(e);
  }
  for(const e of edges)e.type=e.members.length+' recorded connection'+(e.members.length===1?'':'s');
- const projected=arrangeArchitecture({nodes,edges});return {...projected,groups:[...groups.values()],membership};
+ const projected=arrangeArchitecture({nodes,edges});
+ const positions=new Map((graph.positions||[]).map(p=>[p.id,p]));
+ for(const node of projected.nodes){const p=positions.get(node.id);if(p&&Number.isFinite(p.x)&&Number.isFinite(p.y)){node.x=p.x;node.y=p.y;}}
+ return {...projected,groups:[...groups.values()],membership};
+}
+
+// Store overview and expanded-component positions separately from grouping logic.
+export function moveDiagramItem(graph,view,id,x,y){
+ const node=view.nodes.find(n=>n.id===id);if(!node)return false;
+ const position={id,x:Math.max(0,Math.min(10000,x)),y:Math.max(0,Math.min(10000,y))};
+ graph.positions=[...(graph.positions||[]).filter(p=>p.id!==id),position];
+ node.x=position.x;node.y=position.y;
+ const original=graph.nodes.find(n=>n.id===id);if(original){original.x=position.x;original.y=position.y;}
+ return true;
 }
