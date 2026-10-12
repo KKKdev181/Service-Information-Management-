@@ -27,7 +27,7 @@ export function arrangeArchitecture(graph){
  return graph;
 }
 export function renderArchitecture(graph,selected,linkSource){
- const labelBoxes=[],labelMarkup=[];
+ const labelBoxes=[],labelMarkup=[];let routeRight=0;
  const overlaps=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
  function placeLabel(text,x,y){
  const lines=text.match(/.{1,28}(?:\s|$)|.{1,28}/g)||[text];
@@ -45,9 +45,25 @@ export function renderArchitecture(graph,selected,linkSource){
  const groups=new Map();for(const n of graph.nodes){const key=(n.environment||'Not specified')+' · '+zoneFor(n);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(n);}
  // Separate contiguous regions so a zone never encloses unrelated intervening nodes.
  for(const [key,group] of groups){const columns=new Map();for(const n of group){if(!columns.has(n.x))columns.set(n.x,[]);columns.get(n.x).push(n);}for(const col of columns.values()){col.sort((a,b)=>a.y-b.y);let runs=[];for(const n of col){const run=runs.at(-1);if(run&&n.y-(run.at(-1).y+(run.at(-1).height||H))<100)run.push(n);else runs.push([n]);}for(const run of runs){const x=run[0].x-18,y=run[0].y-38,bottom=Math.max(...run.map(n=>n.y+(n.height||H))),width=Math.max(...run.map(n=>n.width||W))+36;svg+=`<rect x="${x}" y="${y}" width="${width}" height="${bottom-y+18}" rx="12" fill="${run.length>1?'#161a21':'none'}" stroke="${run.length>1?'#363e4b':'none'}" stroke-dasharray="3 5"/><text x="${x+9}" y="${y+20}" font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="12" fill="#c8d8e8">${esc(key)}</text>`;}}}
- svg+=graph.edges.map((e,i)=>{const a=lookup.get(e.source),b=lookup.get(e.target);if(!a||!b)return '';const down=b.y>=a.y;const ax=a.x+(a.width||W)/2,bx=b.x+(b.width||W)/2,ay=a.y+(down?(a.height||H):0),by=b.y+(down?0:(b.height||H));const mid=a.y===b.y?a.y+Math.max(a.height||H,b.height||H)+50+(i%3)*18:(ay+by)/2;let d=a.y===b.y?`M${ax} ${a.y+(a.height||H)} V${mid} H${bx} V${b.y+(b.height||H)}`:`M${ax} ${ay} V${mid} H${bx} V${by}`;const route=e.route?.signature===routeSignature(graph,e)?e.route.points:null;if(route?.length)d=route.map((p,j)=>`${j?'L':'M'}${p.x} ${p.y}`).join(' ');const anchor=route?.[Math.floor(route.length/2)];const labelX=anchor?anchor.x:(ax+bx)/2,labelY=anchor?anchor.y:mid;const active=selected?.id===e.id||selected?.id===e.source||selected?.id===e.target;const label=[e.type,e.protocol,e.port].filter(Boolean).join(' · ');
+ svg+=graph.edges.map((e,i)=>{const a=lookup.get(e.source),b=lookup.get(e.target);if(!a||!b)return '';const down=b.y>=a.y;const ax=a.x+(a.width||W)/2,bx=b.x+(b.width||W)/2,ay=a.y+(down?(a.height||H):0),by=b.y+(down?0:(b.height||H));const mid=a.y===b.y?a.y+Math.max(a.height||H,b.height||H)+50+(i%3)*18:(ay+by)/2;let d=a.y===b.y?`M${ax} ${a.y+(a.height||H)} V${mid} H${bx} V${b.y+(b.height||H)}`:`M${ax} ${ay} V${mid} H${bx} V${by}`;const route=e.route?.signature===routeSignature(graph,e)?e.route.points:null;if(route?.length)d=route.map((p,j)=>`${j?'L':'M'}${p.x} ${p.y}`).join(' ');let anchor=route?.[Math.floor(route.length/2)];
+ // A long vertical connection must not run through unrelated equipment.
+ if(!route?.length){
+ const startY=a.y===b.y?a.y+(a.height||H):ay,endY=a.y===b.y?b.y+(b.height||H):by;
+ const points=[{x:ax,y:startY},{x:ax,y:mid},{x:bx,y:mid},{x:bx,y:endY}];
+ const blocked=graph.nodes.filter(n=>n.id!==a.id&&n.id!==b.id).some(n=>points.slice(1).some((p,j)=>{
+ const q=points[j],left=n.x-16,right=n.x+(n.width||W)+16,top=n.y-40,bottom=n.y+(n.height||H)+16;
+ return p.x===q.x?p.x>left&&p.x<right&&Math.max(p.y,q.y)>top&&Math.min(p.y,q.y)<bottom:p.y>top&&p.y<bottom&&Math.max(p.x,q.x)>left&&Math.min(p.x,q.x)<right;
+ }));
+ if(blocked){
+ const lane=Math.max(...graph.nodes.map(n=>n.x+(n.width||W)))+65+i*32;
+ const sy=down?startY+26:startY-50,ty=down?endY-50:endY+26;
+ d=`M${ax} ${startY} V${sy} H${lane} V${ty} H${bx} V${endY}`;
+ routeRight=Math.max(routeRight,lane+40);anchor={x:lane,y:(sy+ty)/2};
+ }
+ }
+ const labelX=anchor?anchor.x:(ax+bx)/2,labelY=anchor?anchor.y:mid;const active=selected?.id===e.id||selected?.id===e.source||selected?.id===e.target;const label=[e.type,e.protocol,e.port].filter(Boolean).join(' · ');
  if(label){const box=placeLabel(label,labelX,labelY-12);const lines=label.match(/.{1,28}(?:\s|$)|.{1,28}/g)||[label];labelMarkup.push(`<g data-edge="${esc(e.id)}" class="arch-edge"><path d="M${labelX} ${labelY} L${box.x+box.w/2} ${box.y+box.h/2}" stroke="#778394" stroke-dasharray="3 3" fill="none"/><rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" rx="7" fill="#1d222b" stroke="#4d5665"/><text font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="15" fill="#ffffff" text-anchor="middle">${lines.map((line,j)=>`<tspan x="${box.x+box.w/2}" y="${box.y+23+j*21}">${esc(line.trim())}</tspan>`).join('')}</text></g>`);}
- return `<g class="arch-edge" data-edge="${esc(e.id)}" opacity="1"><path d="${d}" fill="none" stroke="transparent" stroke-width="18"/><path d="${d}" fill="none" stroke="${active?'#d5bcff':'#80e9ef'}" stroke-width="${active?3.5:2.8}" stroke-linejoin="round" marker-end="url(#arrow)"/><title>${esc(label)}</title></g>`;}).join('');
+ return `<g class="arch-edge" data-edge="${esc(e.id)}" opacity="1"><path d="${d}" fill="none" stroke="transparent" stroke-width="18"/><path d="${d}" fill="none" stroke="${active?'#d5bcff':'#80e9ef'}" stroke-width="${active?3.5:2.8}" stroke-linejoin="round" marker-end="url(#arrow)"/><title>${esc(a.label+' → '+b.label+' · '+label)}</title></g>`;}).join('');
  svg+=graph.nodes.map(n=>{
  const nw=n.width||W,nh=n.height||H,type=componentType(n),color=componentColor(type);
  const active=selected?.id===n.id||linkSource===n.id;
@@ -64,5 +80,5 @@ export function renderArchitecture(graph,selected,linkSource){
  <title>${esc(type+' · '+n.label+' '+(n.ip||''))}</title></g>`;
  }).join('');
  svg+=labelMarkup.join('');
- return {svg,w:Math.max(w,...labelBoxes.map(b=>b.x+b.w+20)),h:Math.max(h,...labelBoxes.map(b=>b.y+b.h+20))};
+ return {svg,w:Math.max(w,routeRight,...labelBoxes.map(b=>b.x+b.w+20)),h:Math.max(h,...labelBoxes.map(b=>b.y+b.h+20))};
 }
