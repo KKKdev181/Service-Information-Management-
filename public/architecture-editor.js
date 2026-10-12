@@ -34,7 +34,9 @@ function dimensions(){return renderArchitecture(visibleGraph(),null,null);}
 function draw(){
  const stale=graph.revision&&graph.inventorySignature!==inventorySignature(record);$('inventory-notice').hidden=!stale;$('inventory-notice').textContent=stale?'Inventory has changed or this diagram has no inventory baseline. Review the current records, then use Generate from records if you want to replace this drawing.':'';
 
- $('hint').textContent='Drag to move · Scroll to zoom · Click for details';
+ $('hint').textContent=linkMode?(linkSource?'2. Click the destination item':'1. Click the source item'):'Drag to move · Scroll to zoom · Click for details';
+ $('connect').textContent=linkMode?'Cancel connection':'Connect items';$('connect').classList.toggle('selected',linkMode);
+ $('connect').setAttribute('aria-pressed',String(linkMode));
  const {svg,w,h}=renderArchitecture(visibleGraph(),selected,linkSource);
  $('canvas').innerHTML=svg;applyCamera();
 }
@@ -68,7 +70,7 @@ function inspector(){if(!selected||selected.kind!=='node'||!graph.nodes.some(n=>
  $('apply').onclick=()=>{const values=Object.fromEntries(fields.map(([key])=>[key,$('edit-'+key).value.trim()]));if(node&&!values.label)return status('Component name is required');if(!node&&values.source===values.target)return status('Choose different source and destination components');Object.assign(item,values);changed();focusComponent(item.id);};
  $('delete').onclick=()=>{if(!confirm('Delete the selected component or connection from this diagram?'))return;if(node){graph.nodes=graph.nodes.filter(n=>n.id!==item.id);graph.edges=graph.edges.filter(e=>e.source!==item.id&&e.target!==item.id);}else graph.edges=graph.edges.filter(e=>e.id!==item.id);selected=null;changed();draw();inspector();};
 }
-function choose(kind,id){selected={kind,id};draw();inspector();if(kind==='edge'&&!grouped)connections({edgeId:id});}
+function choose(kind,id){if(linkMode&&kind==='node'){pickEndpoint(id);return;}selected={kind,id};draw();inspector();if(kind==='edge'&&!grouped)connections({edgeId:id});}
 const pointers=new Map();let gesture=null;
 const localPoint=e=>{const r=$('viewport').getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top};};
 function pinchState(){const [a,b]=[...pointers.values()];return {x:(a.x+b.x)/2,y:(a.y+b.y)/2,d:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y))};}
@@ -121,7 +123,23 @@ $('canvas').addEventListener('keydown',e=>{
  e.preventDefault();scheduleCamera();
 });
 $('add').onclick=()=>{if(!ready)return;const type=$('type').value;const n={id:crypto.randomUUID(),type,label:type,ip:'',environment:'Not specified',notes:'',x:Math.round($('viewport').scrollLeft/zoom+60),y:Math.max(80,...graph.nodes.map(n=>n.y+(n.height||116)+80))};graph.nodes.push(n);changed();focusComponent(n.id);};
-$('connect').onclick=()=>connections({source:selected?.kind==='node'&&graph.nodes.some(n=>n.id===selected.id)?selected.id:''});
+function stopConnecting(){linkMode=false;linkSource=null;draw();inspector();}
+function acceptEndpoint(id){
+ if(!linkSource){linkSource=id;selected=null;draw();$('inspector').innerHTML=`<h2>Choose destination</h2><p>From: <strong>${esc(graph.nodes.find(n=>n.id===id)?.label)}</strong></p><p>Click the item traffic goes to. Drag or zoom to reach it.</p>`;return;}
+ if(id===linkSource){status('Choose a different destination component.');return;}
+ const source=linkSource;stopConnecting();connections({source,target:id});
+}
+function pickEndpoint(id){
+ if(graph.nodes.some(n=>n.id===id)){acceptEndpoint(id);return;}
+ const group=visibleGraph().groups.find(g=>g.id===id);if(!group)return;
+ if(group.members.length===1){acceptEndpoint(group.members[0].id);return;}
+ $('inspector').innerHTML=`<h2>Choose ${linkSource?'destination':'source'}</h2><p>${esc(group.role)} contains ${group.members.length} components. Select the exact item to connect.</p><input id="endpoint-filter" placeholder="Search name or IP" aria-label="Search group components"><div id="endpoint-members"></div>`;
+ const render=()=>{const q=$('endpoint-filter').value.toLowerCase();$('endpoint-members').innerHTML=group.members.filter(n=>n.id!==linkSource&&[n.label,n.ip].join(' ').toLowerCase().includes(q)).map(n=>`<button class="group-member" data-endpoint="${esc(n.id)}"><strong>${esc(n.label)}</strong><span>${esc(n.ip||'No IP recorded')}</span></button>`).join('')||'<p>No matching components.</p>';$('endpoint-members').querySelectorAll('[data-endpoint]').forEach(b=>b.onclick=()=>acceptEndpoint(b.dataset.endpoint));};
+ $('endpoint-filter').oninput=render;render();
+}
+$('connect').onclick=()=>{if(!ready)return;if(linkMode){stopConnecting();return;}linkMode=true;linkSource=null;selected=null;draw();$('inspector').innerHTML='<h2>Choose source</h2><p>Click the item where traffic starts, then click its destination. You can still drag and zoom.</p>';};
+window.addEventListener('keydown',e=>{if(e.key==='Escape'&&linkMode)stopConnecting();});
+
 $('zoom-in').onclick=()=>zoomAt(zoom*1.2);$('zoom-out').onclick=()=>zoomAt(zoom/1.2);
 $('generate').onclick=async()=>{if(!ready||!confirm('Replace the current diagram with one generated from service records?'))return;Object.assign(graph,generateArchitecture(record));selected=null;changed();fit();inspector();};
 $('save').onclick=async()=>{if(!ready)return;const version=epoch;$('save').disabled=true;try{const saved=await request(`/api/services/${encodeURIComponent(serviceId)}/architecture`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(graph)});graph.revision=saved.revision;if(epoch===version){dirty=false;status('Diagram saved');}else status('Previous version saved; newer changes remain unsaved');}catch(e){status(e.message);}finally{$('save').disabled=false;}};
