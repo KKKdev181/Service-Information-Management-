@@ -69,7 +69,7 @@ async function readBook() {
   // Enrich existing workbooks once per actual change; preserve IDs and manual values.
   const records=snapshot(book);let enriched=false;
   for(const record of records){if(applyServerRules(record).changes.length){enriched=true;record.service.revision=String((Number(record.service.revision)||0)+1);record.service.updatedAt=new Date().toISOString();record.service.updatedBy='Server naming rules';}}
-  if(enriched){rewrite(book,'Services',records.map(r=>r.service));rewrite(book,'Servers',records.flatMap(r=>r.Servers));}
+  if(enriched){rewrite(book,'Services',records.map(r=>r.service));rewrite(book,'Servers',records.flatMap(r=>r.Servers));rewrite(book,'Components',records.flatMap(r=>r.Components||[]));}
   if(enriched||migrated)await save(book);
   return book;
 }
@@ -105,7 +105,7 @@ function validate(input) {
   const service = input.service;
   if (!service || !safe(service.name)) throw Object.assign(new Error('Service name is required'), { status: 400 });
   if (safe(service.name).length > 180) throw Object.assign(new Error('Service name is too long'), { status: 400 });
-  if(service.hostingLocations && String(service.hostingLocations).split(',').some(v=>!['GCP','NIC','SALAM'].includes(v.trim()))) throw Object.assign(new Error('Select valid hosting locations: GCP, NIC, SALAM.'),{status:400});
+  if(service.hostingLocations && String(service.hostingLocations).split(',').some(v=>!['NIC','GCP','SALAM','DR'].includes(v.trim()))) throw Object.assign(new Error('Select valid hosting locations: NIC, GCP, SALAM, DR.'),{status:400});
   if(service.hostingType && !['OpenShift','VM','Hybrid'].includes(service.hostingType)) throw Object.assign(new Error('Select OpenShift, VM or Hybrid.'),{status:400});
   if(service.serverCount!==undefined && service.serverCount!==null && service.serverCount!=='' && (!/^\d+$/.test(String(service.serverCount)) || !Number.isSafeInteger(Number(service.serverCount)))) throw Object.assign(new Error('Number of servers must be a non-negative whole number.'),{status:400});
   input.Components ??= [];
