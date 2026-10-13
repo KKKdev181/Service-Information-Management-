@@ -22,7 +22,7 @@ export function groupArchitecture(graph,expanded=new Set()){
  if(expanded.has(g.id))nodes.push(...g.members.map(n=>({...n,environment:g.environment,groupId:g.id})));
  else nodes.push({id:g.id,label:g.role+' · '+g.members.length,type:icons[g.role],environment:g.environment,ip:g.members.length+' components',width:280,height:116,x:0,y:0,isGroup:true,groupId:g.id});
  }
- for(const e of graph.edges){const a=membership.get(e.source),b=membership.get(e.target);if(!a||!b)continue;
+ for(const e of graph.edges){const a=membership.get(e.source)||[...groups.values()].find(g=>g.id===e.source),b=membership.get(e.target)||[...groups.values()].find(g=>g.id===e.target);if(!a||!b)continue;
  if(a===b)a.internal.push(e);
  const source=expanded.has(a.id)?e.source:a.id,target=expanded.has(b.id)?e.target:b.id;
  if(source===target)continue;
@@ -44,3 +44,6 @@ export function moveDiagramItem(graph,view,id,x,y){
  const original=graph.nodes.find(n=>n.id===id);if(original){original.x=position.x;original.y=position.y;}
  return true;
 }
+
+// Groups are valid architecture endpoints, distinct from individual server links.
+export function connectionNodes(graph){return [...graph.nodes,...groupArchitecture({nodes:graph.nodes,edges:[]}).groups.map(g=>({id:g.id,label:g.role+' · '+g.environment,type:'Group',environment:g.environment,ip:''}))];}
