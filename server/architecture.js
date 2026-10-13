@@ -21,6 +21,11 @@ export function validateGraph(input){
  positionIds.add(p.id);positions.push({id:p.id,x:Math.max(0,Math.min(10000,p.x)),y:Math.max(0,Math.min(10000,p.y))});
  }
  }
- return {nodes,edges,positions,inventorySignature:typeof input.inventorySignature==='string'?input.inventorySignature.slice(0,1000):''};
+ const arrows=[];const arrowIds=new Set();
+ if(input.arrows!==undefined){
+ if(!Array.isArray(input.arrows)||input.arrows.length>1000)throw fail('Invalid arrow list');
+ for(const a of input.arrows){if(!a||typeof a.id!=='string'||a.id.length>1000||arrowIds.has(a.id)||!['x1','y1','x2','y2'].every(k=>Number.isFinite(a[k])&&a[k]>=0&&a[k]<=10000))throw fail('Invalid arrow');arrowIds.add(a.id);arrows.push({id:a.id,x1:a.x1,y1:a.y1,x2:a.x2,y2:a.y2});}
+ }
+ return {nodes,edges,positions,arrows,inventorySignature:typeof input.inventorySignature==='string'?input.inventorySignature.slice(0,1000):''};
 }
 export function saveArchitecture(id,input){const result=queue.then(async()=>{const file=location(id),graph=validateGraph(input),old=await readArchitecture(id);if(input.revision!==old.revision)throw fail('This diagram was updated in another session. Reload the page before saving.',409);await fs.mkdir(directory,{recursive:true});const temp=file+'.'+crypto.randomUUID()+'.tmp';const saved={...graph,revision:old.revision+1,updatedAt:new Date().toISOString()};try{await fs.writeFile(temp,JSON.stringify(saved,null,2));if(old.revision)await fs.copyFile(file,file+'.backup');await fs.rename(temp,file);}finally{await fs.rm(temp,{force:true});}return saved;});queue=result.catch(()=>{});return result;}
