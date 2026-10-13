@@ -20,21 +20,29 @@ function setTool(hand){arrowTool=false;$('draw-arrow').classList.remove('selecte
 $('draw-arrow').onclick=()=>{const next=!arrowTool;setTool(false);arrowTool=next;$('draw-arrow').classList.toggle('selected',next);$('draw-arrow').setAttribute('aria-pressed',String(next));draw();};
 $('tool-select').onclick=()=>setTool(false);$('tool-pan').onclick=()=>setTool(true);
 $('layout').onclick=()=>{if(!ready)return;graph.positions=[];changed();resetProjection();};
-let expanded=new Set(),projection=null,projectionEpoch=-1;
-function visibleGraph(){if(!grouped)return graph;if(!projection||projectionEpoch!==epoch){projection=groupArchitecture(graph,expanded);projectionEpoch=epoch;}return {...projection,arrows:graph.arrows||[]};}
+let projection=null,projectionEpoch=-1;
+function visibleGraph(){if(!grouped)return graph;if(!projection||projectionEpoch!==epoch){projection=groupArchitecture(graph);projectionEpoch=epoch;}return {...projection,arrows:graph.arrows||[]};}
 function resetProjection(){projection=null;selected=null;draw();fit();inspector();}
-function focusComponent(id){
- const group=visibleGraph().groups.find(g=>g.members.some(n=>n.id===id));
- if(group){expanded.add(group.id);projection=null;}
- choose('node',id);fit();
+function focusComponent(id){choose('node',id);}
+function openGroup(id){
+ const group=visibleGraph().groups.find(g=>g.id===id);if(!group)return;
+ const opener=document.activeElement;
+ const dialog=document.createElement('dialog');dialog.className='group-dialog';dialog.setAttribute('aria-labelledby','group-dialog-title');
+ dialog.innerHTML=`<header><div><h2 id="group-dialog-title">${esc(group.role)}</h2><p>${esc(group.environment)} · ${group.members.length} components · ${group.internal.length} internal connections</p></div><button class="btn" data-close aria-label="Close group details">Close ×</button></header><label for="group-search">Find a component</label><input id="group-search" type="search" placeholder="Search name, type or IP" autofocus><div class="group-popup-members"></div><details class="group-internal"><summary>Internal connections (${group.internal.length})</summary>${group.internal.map(e=>{const a=graph.nodes.find(n=>n.id===e.source),b=graph.nodes.find(n=>n.id===e.target);return `<button class="group-member" data-group-connection="${esc(e.id)}"><strong>${esc(a?.label)} → ${esc(b?.label)}</strong><span>${esc([e.protocol,e.port,e.type].filter(Boolean).join(' · ')||'No connection details recorded')}</span></button>`;}).join('')||'<p>No internal connections recorded.</p>'}</details>`;
+ const list=dialog.querySelector('.group-popup-members'),search=dialog.querySelector('input');
+ function renderMembers(){const q=search.value.trim().toLowerCase();list.innerHTML=group.members.filter(n=>[n.label,n.type,n.ip].join(' ').toLowerCase().includes(q)).map(n=>`<button class="group-popup-member" data-popup-member="${esc(n.id)}"><svg viewBox="0 0 64 64" aria-hidden="true">${icon(n.type)}</svg><span><strong>${esc(n.label)}</strong><span>${esc(n.type)} · ${esc(n.ip||'No IP recorded')}</span><small>View / edit details →</small></span></button>`).join('')||'<p>No matching components.</p>';list.querySelectorAll('[data-popup-member]').forEach(b=>b.onclick=()=>{dialog.close();focusComponent(b.dataset.popupMember);});}
+ search.oninput=renderMembers;renderMembers();
+ dialog.querySelector('[data-close]').onclick=()=>dialog.close();
+ dialog.querySelectorAll('[data-group-connection]').forEach(b=>b.onclick=()=>{dialog.close();connections({edgeId:b.dataset.groupConnection});});
+ dialog.addEventListener('close',()=>{dialog.remove();(opener?.isConnected?opener:$('canvas')).focus({preventScroll:true});});
+ document.body.append(dialog);dialog.showModal();
 }
-$('collapse-groups').onclick=()=>{expanded.clear();resetProjection();};
 function groupInspector(){
  const view=visibleGraph();const node=selected?.kind==='node'&&view.nodes.find(n=>n.id===selected.id),edge=selected?.kind==='edge'&&view.edges.find(e=>e.id===selected.id);
  const group=node&&view.groups.find(g=>g.id===(node.groupId||node.id));
- if(group){$('inspector').innerHTML=`<h2>${esc(group.role)}</h2><p>${esc(group.environment)} · ${group.members.length} components</p><button class="btn primary" id="expand-group">${expanded.has(group.id)?'Collapse group':'Expand in diagram'}</button><p>${group.internal.length} recorded connections within this group</p>`+group.members.map(n=>`<button class="group-member" data-member="${esc(n.id)}"><strong>${esc(n.label)}</strong><span>${esc(n.type)} · ${esc(n.ip||'No IP recorded')}</span><small>View / edit component →</small></button>`).join('');$('expand-group').onclick=()=>{expanded.has(group.id)?expanded.delete(group.id):expanded.add(group.id);resetProjection();};$('inspector').querySelectorAll('[data-member]').forEach(b=>b.onclick=()=>{focusComponent(b.dataset.member);});return;}
+ if(group){$('inspector').innerHTML=`<h2>${esc(group.role)}</h2><p>${esc(group.environment)} · ${group.members.length} components</p><button class="btn primary" id="expand-group">View components ↗</button><p>${group.internal.length} recorded connections within this group</p>`+group.members.map(n=>`<button class="group-member" data-member="${esc(n.id)}"><strong>${esc(n.label)}</strong><span>${esc(n.type)} · ${esc(n.ip||'No IP recorded')}</span><small>View / edit component →</small></button>`).join('');$('expand-group').onclick=()=>openGroup(group.id);$('inspector').querySelectorAll('[data-member]').forEach(b=>b.onclick=()=>{focusComponent(b.dataset.member);});return;}
  if(edge){$('inspector').innerHTML='<h2>Selected connection</h2><button id="delete-line" class="btn danger">Delete selected line</button><p>This line represents '+edge.members.length+' connection(s). Press Delete to remove it, or select an entry below to edit one connection.</p>'+edge.members.map(e=>{const a=graph.nodes.find(n=>n.id===e.source),b=graph.nodes.find(n=>n.id===e.target);return `<button class="group-member" data-connection="${esc(e.id)}"><strong>${esc(a?.label)} → ${esc(b?.label)}</strong><span>${esc([e.type,e.protocol,e.port].filter(Boolean).join(' · '))}</span><small>View / edit connection →</small></button>`;}).join('');$('delete-line').onclick=deleteSelectedLine;$('inspector').querySelectorAll('[data-connection]').forEach(b=>b.onclick=()=>{connections({edgeId:b.dataset.connection});});return;}
- $('inspector').innerHTML=`<h2>Architecture overview</h2><p>${view.groups.length} groups · ${graph.nodes.length} components · ${graph.edges.length} recorded connections</p><p>Select a group to see its component list, or an arrow to inspect its recorded connections.</p><p>Groups are separated by environment. Unassigned components need a role; select a component and set Architecture role.</p><p>Expand only the group you need. Select a component to edit it here; select an arrow to inspect connections.</p>`;
+ $('inspector').innerHTML=`<h2>Architecture overview</h2><p>${view.groups.length} groups · ${graph.nodes.length} components · ${graph.edges.length} recorded connections</p><p>Select a group to see its component list, or an arrow to inspect its recorded connections.</p><p>Groups are separated by environment. Unassigned components need a role; select a component and set Architecture role.</p><p>Use the expand button on a group to open its components without changing the diagram.</p>`;
 }
 function connections(options={}){if(!ready)return;openConnections(graph,async arrange=>{selected=null;changed();draw();inspector();if(arrange)resetProjection();},options);}
 $('connections-list').onclick=()=>connections({list:true});
@@ -50,7 +58,8 @@ function draw(){
  $('connect').textContent=linkMode?'Cancel connection':'Connect items';$('connect').classList.toggle('selected',linkMode);
  $('connect').setAttribute('aria-pressed',String(linkMode));
  $('diagram-count').textContent=graph.nodes.length+' components · '+graph.edges.length+' connections';
- const {svg,w,h}=renderArchitecture(visibleGraph(),selected,linkSource);
+ const view=visibleGraph(),highlight=selected?.kind==='node'&&!view.nodes.some(n=>n.id===selected.id)?{kind:'node',id:view.membership.get(selected.id)?.id}:selected;
+ const {svg,w,h}=renderArchitecture(view,highlight,linkSource);
  $('canvas').innerHTML=svg;applyCamera();
 }
 // Camera changes never alter inventory, diagram positions, or unsaved state.
@@ -110,6 +119,7 @@ const localPoint=e=>{const r=$('viewport').getBoundingClientRect();return {x:e.c
 function pinchState(){const [a,b]=[...pointers.values()];return {x:(a.x+b.x)/2,y:(a.y+b.y)/2,d:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y))};}
 $('canvas').addEventListener('pointerdown',e=>{
  if(!ready||![0,1].includes(e.button))return;
+ const expand=e.target.closest('[data-expand-group]');if(expand&&e.button===0&&!arrowTool&&!linkMode){e.preventDefault();openGroup(expand.dataset.expandGroup);return;}
  e.preventDefault();$('canvas').focus({preventScroll:true});
  const p=localPoint(e);pointers.set(e.pointerId,p);
  const target=e.target.closest('[data-node],[data-edge],[data-arrow]');
@@ -166,6 +176,7 @@ $('viewport').addEventListener('wheel',e=>{
 },{passive:false});
 $('canvas').addEventListener('keydown',e=>{
  if(e.ctrlKey||e.metaKey)return;
+ const expand=e.target.closest('[data-expand-group]');if(expand&&(e.key==='Enter'||e.key===' ')){e.preventDefault();e.stopPropagation();openGroup(expand.dataset.expandGroup);return;}
  const target=e.target.closest('[data-node]');
  if(target&&(e.key==='Enter'||e.key===' ')){e.preventDefault();choose('node',target.dataset.node);return;}
  const step=60/zoom;
@@ -181,7 +192,8 @@ function addShape(type,point){
  const x=Math.max(0,Math.round((point?.x??camera.x+v.clientWidth/zoom/2)-112)),y=Math.max(0,Math.round((point?.y??camera.y+v.clientHeight/zoom/2)-58));
  graph.nodes.push({id,type,label:type,ip:'',environment:'Not specified',notes:'',x,y});
  graph.positions=[...(graph.positions||[]),{id,x,y}];
- const group=groupArchitecture(graph).membership.get(id);expanded.add(group.id);
+ const group=groupArchitecture(graph).membership.get(id);
+ if(!visibleGraph().nodes.some(n=>n.id===group.id))graph.positions.push({id:group.id,x,y});
  linkMode=false;linkSource=null;projection=null;selected={kind:'node',id};changed();draw();inspector();
 }
 $('add').onclick=()=>addShape($('type').value);
@@ -209,7 +221,7 @@ $('connect').onclick=()=>{if(!ready)return;if(linkMode){stopConnecting();return;
 window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(arrowTool)setTool(false);if(linkMode)stopConnecting();}});
 
 $('zoom-in').onclick=()=>zoomAt(zoom*1.2);$('zoom-out').onclick=()=>zoomAt(zoom/1.2);
-$('generate').onclick=async()=>{if(!ready||!confirm('Replace the current diagram with one generated from service records?'))return;Object.assign(graph,generateArchitecture(record),{positions:[],arrows:[]});expanded.clear();selected=null;changed();draw();fit();inspector();};
+$('generate').onclick=async()=>{if(!ready||!confirm('Replace the current diagram with one generated from service records?'))return;Object.assign(graph,generateArchitecture(record),{positions:[],arrows:[]});selected=null;changed();draw();fit();inspector();};
 $('save').onclick=async()=>{if(!ready)return;const version=epoch;$('save').disabled=true;try{const saved=await request(`/api/services/${encodeURIComponent(serviceId)}/architecture`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(graph)});graph.revision=saved.revision;if(epoch===version){dirty=false;status('Diagram saved');}else status('Previous version saved; newer changes remain unsaved');}catch(e){status(e.message);}finally{$('save').disabled=false;}};
 $('export').onclick=()=>{if(!ready)return;const svg=$('canvas').cloneNode(true);const {w,h}=dimensions();svg.setAttribute('viewBox',`0 0 ${w} ${h}`);svg.setAttribute('width',w);svg.setAttribute('height',h);const blob=new Blob([new XMLSerializer().serializeToString(svg)],{type:'image/svg+xml;charset=utf-8'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='service-architecture.svg';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
@@ -226,4 +238,4 @@ window.addEventListener('keydown',e=>{
 });
 window.addEventListener('keyup',e=>{if(e.code==='Space'){spacePan=false;$('viewport').classList.toggle('hand-tool',handTool);}});
 window.addEventListener('blur',()=>{spacePan=false;$('viewport').classList.toggle('hand-tool',handTool);});
-$('canvas').addEventListener('dblclick',e=>{if(linkMode||handTool)return;const id=e.target.closest('[data-node]')?.dataset.node;if(!id)return;const group=visibleGraph().groups.find(g=>g.id===id);if(group){expanded.add(id);resetProjection();}else{choose('node',id);$('edit-label')?.focus();}});
+$('canvas').addEventListener('dblclick',e=>{if(linkMode||handTool)return;const id=e.target.closest('[data-node]')?.dataset.node;if(!id)return;const group=visibleGraph().groups.find(g=>g.id===id);if(group){openGroup(id);}else{choose('node',id);$('edit-label')?.focus();}});
