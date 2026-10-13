@@ -11,17 +11,17 @@ export function roleFor(n){
  if(['VM','OpenShift','Kubernetes','Docker','Container','API'].includes(n.type))return 'Applications';
  if(['Storage','S3 / MinIO'].includes(n.type))return 'Storage';
  if(['Monitoring','Backup','DR Site'].includes(n.type))return 'Operations';
- if(['External','External System','Internet','Cloud','URL','DNS','VPN','NAT','Router','Switch','Proxy','API Gateway','DataPower','3scale','Apigee','Kafka','Message Queue'].includes(n.type))return 'Integrations';
+ if(['MPLS','GSN','External','External System','Internet','Cloud','URL','DNS','VPN','NAT','Router','Switch','Proxy','API Gateway','DataPower','3scale','Apigee','Kafka','Message Queue'].includes(n.type))return 'Integrations';
  return 'Unassigned';
 }
 const icons={'Applications':'VM','Databases':'Database','Load Balancers':'Load Balancer','Security':'Firewall','Integrations':'API','Storage':'Storage','Operations':'Monitoring','Unassigned':'Server'};
 export function groupArchitecture(graph,expanded=new Set()){
  const groups=new Map(),membership=new Map(),nodes=[],edges=[],pairs=new Map();
- for(const n of graph.nodes){const environment=!n.environment||n.environment==='\u063a\u064a\u0631 \u0645\u062d\u062f\u062f'?'Not specified':n.environment;const role=roleFor(n),key=n.displayMode==='separate'?n.id:JSON.stringify([environment,role]);let g=groups.get(key);if(!g){g={id:n.displayMode==='separate'?n.id:'group:'+key,separate:n.displayMode==='separate',role,environment,members:[],internal:[]};groups.set(key,g);}g.members.push(n);membership.set(n.id,g);}
+ for(const n of graph.nodes){const environment=!n.environment||n.environment==='\u063a\u064a\u0631 \u0645\u062d\u062f\u062f'?'Not specified':n.environment;const role=roleFor(n),key=n.displayMode==='separate'?n.id:JSON.stringify(n.hostingLocation?[environment,role,n.hostingLocation]:[environment,role]);let g=groups.get(key);if(!g){g={id:n.displayMode==='separate'?n.id:'group:'+key,separate:n.displayMode==='separate',role,environment,hostingLocation:n.hostingLocation||'',members:[],internal:[]};groups.set(key,g);}g.members.push(n);membership.set(n.id,g);}
  for(const g of groups.values()){
  if(g.separate)nodes.push({...g.members[0],environment:g.environment});
  else if(expanded.has(g.id))nodes.push(...g.members.map(n=>({...n,environment:g.environment,groupId:g.id})));
- else nodes.push({id:g.id,label:g.role+' · '+g.members.length,type:icons[g.role],environment:g.environment,ip:g.members.length+' components',width:280,height:116,x:0,y:0,isGroup:true,groupId:g.id});
+ else nodes.push({id:g.id,label:g.role+' · '+g.members.length,type:g.members.every(n=>n.type===g.members[0].type)?g.members[0].type:icons[g.role],environment:g.environment,hostingLocation:g.hostingLocation,ip:g.members.length+' components',width:280,height:116,x:0,y:0,isGroup:true,groupId:g.id});
  }
  for(const e of graph.edges){const a=membership.get(e.source)||[...groups.values()].find(g=>g.id===e.source),b=membership.get(e.target)||[...groups.values()].find(g=>g.id===e.target);if(!a||!b)continue;
  if(a===b)a.internal.push(e);
@@ -47,4 +47,4 @@ export function moveDiagramItem(graph,view,id,x,y){
 }
 
 // Groups are valid architecture endpoints, distinct from individual server links.
-export function connectionNodes(graph){return [...graph.nodes,...groupArchitecture({nodes:graph.nodes,edges:[]}).groups.map(g=>({id:g.id,label:g.role+' · '+g.environment,type:'Group',environment:g.environment,ip:''}))];}
+export function connectionNodes(graph){return [...graph.nodes,...groupArchitecture({nodes:graph.nodes,edges:[]}).groups.map(g=>({id:g.id,label:g.role+' · '+g.environment+(g.hostingLocation?' · '+g.hostingLocation:''),type:'Group',environment:g.environment,hostingLocation:g.hostingLocation,ip:''}))];}
