@@ -64,6 +64,7 @@ export function renderArchitecture(graph,selected,linkSource){
  const labelX=anchor?anchor.x:(ax+bx)/2,labelY=anchor?anchor.y:mid;const active=selected?.id===e.id||selected?.id===e.source||selected?.id===e.target;const label=[e.type,e.protocol,e.port].filter(Boolean).join(' · ');
  if(label){const box=placeLabel(label,labelX,labelY-12);const lines=label.match(/.{1,28}(?:\s|$)|.{1,28}/g)||[label];labelMarkup.push(`<g data-edge="${esc(e.id)}" class="arch-edge"><path d="M${labelX} ${labelY} L${box.x+box.w/2} ${box.y+box.h/2}" stroke="#778394" stroke-dasharray="3 3" fill="none"/><rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" rx="7" fill="#1d222b" stroke="#4d5665"/><text font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="15" fill="#ffffff" text-anchor="middle">${lines.map((line,j)=>`<tspan x="${box.x+box.w/2}" y="${box.y+23+j*21}">${esc(line.trim())}</tspan>`).join('')}</text></g>`);}
  return `<g class="arch-edge" data-edge="${esc(e.id)}" opacity="1"><path d="${d}" fill="none" stroke="transparent" stroke-width="18"/><path d="${d}" fill="none" stroke="${active?'#d5bcff':'#80e9ef'}" stroke-width="${active?3.5:2.8}" stroke-linejoin="round" marker-end="url(#arrow)"/><title>${esc(a.label+' → '+b.label+' · '+label)}</title></g>`;}).join('');
+ svg+=(graph.arrows||[]).map(a=>`<g class="arch-edge" data-arrow="${esc(a.id)}" tabindex="0" role="button" aria-label="Free arrow"><path d="M${a.x1} ${a.y1} L${a.x2} ${a.y2}" fill="none" stroke="transparent" stroke-width="20"/><path d="M${a.x1} ${a.y1} L${a.x2} ${a.y2}" fill="none" stroke="${selected?.kind==='arrow'&&selected.id===a.id?'#d5bcff':'#80e9ef'}" stroke-width="3" marker-end="url(#arrow)"/><title>Free arrow — no linked items</title></g>`).join('');
  svg+=graph.nodes.map(n=>{
  const nw=n.width||W,nh=n.height||H,type=componentType(n),color=componentColor(type);
  const active=selected?.id===n.id||linkSource===n.id;
@@ -81,5 +82,5 @@ export function renderArchitecture(graph,selected,linkSource){
  <title>${esc(type+' · '+n.label+' '+(n.ip||''))}</title></g>`;
  }).join('');
  svg+=labelMarkup.join('');
- return {svg,w:Math.max(w,routeRight,...labelBoxes.map(b=>b.x+b.w+20)),h:Math.max(h,...labelBoxes.map(b=>b.y+b.h+20))};
+ return {svg,w:Math.max(w,routeRight,...(graph.arrows||[]).flatMap(a=>[a.x1+30,a.x2+30]),...labelBoxes.map(b=>b.x+b.w+20)),h:Math.max(h,...(graph.arrows||[]).flatMap(a=>[a.y1+30,a.y2+30]),...labelBoxes.map(b=>b.y+b.h+20))};
 }
