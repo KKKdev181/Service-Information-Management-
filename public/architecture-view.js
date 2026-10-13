@@ -1,11 +1,11 @@
-import {icon,componentType,componentColor} from './architecture-icons.js';
+import {icon,componentType,componentColor,hostingIcon} from './architecture-icons.js';
 export {icon} from './architecture-icons.js';
 import {routeSignature} from './architecture-layout.js';
 export const W=224,H=116;
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export const types=['User','Internet','External System','External','URL','Firewall','WAF','Load Balancer','Router','Switch','VPN','NAT','DNS','Proxy','Physical Server','VM','Server','Windows Server','Linux Server','OpenShift','Kubernetes','Docker','Container','Cloud','Database','Oracle','SQL Server','PostgreSQL','Redis','Storage','S3 / MinIO','API','API Gateway','DataPower','3scale','Apigee','Kafka','Message Queue','Monitoring','Backup','DR Site'];
+export const types=['User','Internet','External System','External','URL','Firewall','WAF','Load Balancer','Switch','VPN','MPLS','GSN','NAT','DNS','Proxy','Physical Server','VM','Server','Windows Server','Linux Server','OpenShift','Docker','Cloud','Database','Oracle','SQL Server','PostgreSQL','Redis','Storage','S3 / MinIO','API','API Gateway','DataPower','3scale','Apigee','Kafka','Message Queue','Monitoring','Backup','DR Site'];
 export const zones=['EXTERNAL','NETWORK / SECURITY','APPLICATION','DATA','INTEGRATION','OPERATIONS'];
-export function zoneFor(n){if(n.zone)return n.zone;if(['User','Internet','External System','External','URL','Cloud'].includes(n.type))return zones[0];if(['Firewall','WAF','Load Balancer','Router','Switch','VPN','NAT','DNS','Proxy'].includes(n.type))return zones[1];if(['Database','Oracle','SQL Server','PostgreSQL','Redis','Storage','S3 / MinIO'].includes(n.type))return zones[3];if(['API','API Gateway','DataPower','3scale','Apigee','Kafka','Message Queue'].includes(n.type))return zones[4];if(['Monitoring','Backup','DR Site'].includes(n.type))return zones[5];return zones[2];}
+export function zoneFor(n){if(n.zone)return n.zone;if(['User','Internet','External System','External','URL','Cloud'].includes(n.type))return zones[0];if(['Firewall','WAF','Load Balancer','Switch','VPN','MPLS','GSN','NAT','DNS','Proxy'].includes(n.type))return zones[1];if(['Database','Oracle','SQL Server','PostgreSQL','Redis','Storage','S3 / MinIO'].includes(n.type))return zones[3];if(['API','API Gateway','DataPower','3scale','Apigee','Kafka','Message Queue'].includes(n.type))return zones[4];if(['Monitoring','Backup','DR Site'].includes(n.type))return zones[5];return zones[2];}
 export function arrangeArchitecture(graph){
  // Collapse strongly connected components first: cycles remain peers, not arbitrary chains.
  const nodes=new Map(graph.nodes.map(n=>[n.id,n])),adj=new Map(graph.nodes.map(n=>[n.id,[]]));
@@ -74,7 +74,7 @@ export function renderArchitecture(graph,selected,linkSource){
  <g transform="translate(4,0) scale(1.13)">${icon(type)}</g>
  <text x="82" y="27" font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="15" font-weight="600" fill="${color}">${esc(type)}</text>
  <text x="82" y="48" font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="13" fill="#bac7d9">${esc(n.environment||'Not specified')}</text>
- <path d="M83 60h28" stroke="${color}" stroke-width="3" stroke-linecap="round"/>
+ ${n.hostingLocation?`<g transform="translate(82,51) scale(.25)">${hostingIcon(n.hostingLocation)}</g><text x="103" y="64" font-size="11" font-family="Segoe UI,Arial,sans-serif" fill="#e0ebfa">${esc(n.hostingLocation)}</text>`:`<path d="M83 60h28" stroke="${color}" stroke-width="3" stroke-linecap="round"/>`}
  <text x="${nw/2}" y="85" text-anchor="middle" font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="16" font-weight="600" fill="#f1f5f9">${esc(n.label.length>Math.floor(nw/8.5)?n.label.slice(0,Math.floor(nw/8.5)-1)+'…':n.label)}</text>
  <text x="${nw/2}" y="106" text-anchor="middle" font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="14" fill="#c8d5e6">${esc((n.ip||'').slice(0,Math.floor(nw/8)))}</text>
  ${n.isGroup?`<g class="group-expand" data-expand-group="${esc(n.id)}" tabindex="0" role="button" aria-label="View components in ${esc(n.label)}" transform="translate(${nw-38},8)"><rect width="30" height="30" rx="6" fill="#25354b" stroke="#7897bc"/><path d="M8 13V8h5M17 8h5v5M22 17v5h-5M13 22H8v-5" stroke="#d4e6ff" stroke-width="1.8" fill="none"/><title>View components</title></g>`:''}
