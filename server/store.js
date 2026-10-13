@@ -13,7 +13,7 @@ const sheets = {
   Servers: ['id', 'serviceId', 'name', 'environment', 'role', 'privateIp', 'publicIp', 'os', 'site', 'domain', 'cpu', 'ram', 'storage', 'notes', 'zone', 'platform'],
   Endpoints: ['id', 'serviceId', 'url', 'dns', 'vip', 'port', 'protocol', 'environment', 'publicIp', 'wafIp', 'notes'],
   LoadBalancers: ['id', 'serviceId', 'name', 'vip', 'pool', 'members', 'port', 'waf', 'hostIp', 'hostPort', 'hostProtocol', 'vipProtocol', 'publishType', 'certificate', 'notes'],
-  Connections: ['id', 'serviceId', 'type', 'source', 'destination', 'port', 'reference', 'notes', 'sourceIp', 'sourceHost', 'destinationIp', 'destinationHost', 'protocol', 'duration'],
+  Connections: ['id', 'serviceId', 'type', 'source', 'destination', 'port', 'reference', 'notes', 'sourceIp', 'sourceHost', 'destinationIp', 'destinationHost', 'protocol', 'duration', 'tunnelName', 'vpnType', 'environment', 'localGateway', 'remoteGateway', 'localSubnets', 'remoteSubnets', 'vpnStatus'],
   Networks: ['id', 'serviceId', 'name', 'ipam', 'range', 'vlan', 'subnet', 'gateway', 'context', 'notes']
 };
 const children = ['Components', 'Servers', 'Endpoints', 'LoadBalancers', 'Connections', 'Networks'];
