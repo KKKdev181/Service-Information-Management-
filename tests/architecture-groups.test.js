@@ -31,3 +31,18 @@ test('explicit roles persist and unknown servers are not classified by hostname'
  assert.equal(roleFor(saved.nodes[0]),'Applications');
  assert.equal(roleFor({type:'VM',architectureRole:'Unassigned'}),'Unassigned');
 });
+
+test('group links preserve scope and direction without inventing server pairs or ports',()=>{
+ const graph=sample(),view=groupArchitecture(graph);
+ const from=view.membership.get('a').id,to=view.membership.get('c').id;
+ graph.edges=[{id:'group-link',source:from,target:to,protocol:'',port:''}];
+ const saved=validateGraph(graph),projected=groupArchitecture(saved);
+ assert.equal(saved.edges.length,1);
+ assert.equal(saved.edges[0].source,from);
+ assert.equal(saved.edges[0].target,to);
+ assert.equal(saved.edges[0].port,'');
+ assert.equal(projected.edges.length,1);
+ assert.equal(projected.edges[0].source,from);
+ assert.equal(projected.edges[0].target,to);
+ assert.throws(()=>validateGraph({...graph,edges:[{id:'invalid',source:from,target:'group:missing'}]}));
+});
