@@ -1,3 +1,4 @@
+import {canonicalLocation,serverLocation} from './server-rules.js';
 export const text=v=>String(v??'').trim();
 export const unique=values=>[...new Set(values.map(text).filter(Boolean))];
 export function environmentName(v){const s=text(v);return ({prod:'Production',production:'Production',stg:'Staging',staging:'Staging',test:'QA','test (qa)':'QA',qa:'QA',dev:'Dev',development:'Dev',dr:'DR','dev/qa':'Dev/QA'})[s.toLowerCase()]||s||'Not specified';}
@@ -5,7 +6,7 @@ export function serviceFacts(record){
  const servers=record.Servers||[],components=record.Components||[],endpoints=record.Endpoints||[],lbs=record.LoadBalancers||[];
  const environmentNames=unique([...servers,...components,...endpoints].map(n=>environmentName(n.environment)));
  const environments=environmentNames.map(name=>({name,servers:servers.filter(n=>environmentName(n.environment)===name).length,components:components.filter(n=>environmentName(n.environment)===name).length,endpoints:endpoints.filter(n=>environmentName(n.environment)===name).length}));
- const locations=unique([...(record.service.hostingLocations||'').split(','),...servers.map(n=>n.site),...components.map(n=>n.site)]);
+ const locations=unique([...(record.service.hostingLocations||'').split(',').map(canonicalLocation),...servers.map(serverLocation),...components.map(serverLocation)]);
  const platforms=unique([record.service.hostingType,...servers.map(n=>n.platform),...components.map(n=>n.type)]);
  const hasVM=platforms.some(p=>/^VM$|^Hybrid$/i.test(p)),hasOCP=platforms.some(p=>/^OpenShift$|^Hybrid$/i.test(p));
  const platform=hasVM&&hasOCP?'Hybrid':hasOCP?'OpenShift':hasVM?'VM':text(record.service.hostingType)||'Not specified';
