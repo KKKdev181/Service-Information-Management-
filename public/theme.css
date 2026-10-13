@@ -1,0 +1,45 @@
+/* Shared appearance tokens. Light is the office default; dark retains its palette. */
+.theme-picker{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);padding:14px 0}.theme-picker select{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--line);padding:8px;border-radius:7px}.sidebar [data-theme-picker]{margin-top:24px}.asset-results{padding:18px;border-bottom:1px solid var(--line)}.asset-results h3{margin:0 0 12px}.asset-results article{display:flex;align-items:center;gap:14px;padding:14px 0;border-top:1px solid var(--line)}.asset-results article>div{flex:1;min-width:0}.asset-results small{display:block;color:var(--muted);margin-top:4px}.asset-results p{margin:5px 0;overflow-wrap:anywhere;font-size:13px;color:var(--muted)}.hub-finding{display:flex;align-items:center;justify-content:space-between;gap:16px}.impact-result{padding:14px;border:1px solid var(--line);border-radius:8px;margin-bottom:16px}.impact-result p{line-height:1.6}.impact-result a{display:block;margin:12px 0}.impact-dim{opacity:.18!important}.impact-hit{opacity:1!important}.arch-body .theme-picker{padding:0}button,a,summary,select{touch-action:manipulation}button,summary,select{cursor:pointer}:focus-visible{outline:3px solid #8d63c7;outline-offset:3px}
+:root[data-theme=light]{color-scheme:light;--bg:#f4f6fa;--surface:#fff;--raised:#eef2f7;--line:#d5dde8;--text:#1b2b42;--muted:#56657a;--accent:#7144a0}
+[data-theme=light] body{background:var(--bg);color:var(--text)}
+[data-theme=light] :is(.sidebar,.arch-header,.arch-tools,#shape-library,#inspector,.editor-status,.editor-credit){background:#fff;color:var(--text);border-color:var(--line)}
+[data-theme=light] :is(.panel,.hub-panel,.overview-panel,.insight-panel,.modal,.group-dialog,.connection-dialog,.executive-card,.status-card){background:#fff;color:var(--text);border-color:var(--line);box-shadow:0 3px 16px #22334c08}
+[data-theme=light] :is(.toolbar,.hub-tabs,.service-directory-table th,.modal-header,.modal-footer,.form-section-header,.hub-edit-section>summary){background:#eef2f7;color:var(--text);border-color:var(--line)}
+[data-theme=light] :is(input,select,textarea,.search input,.toolbar select,#inspector input,#inspector select,#inspector textarea){background:#fff;color:var(--text);border-color:#b7c3d3}
+[data-theme=light] :is(input,textarea)::placeholder{color:#65748a}
+[data-theme=light] :is(.btn,.link-btn,.group-member,.group-popup-member,.shape-item,.hub-environments button,.hub-asset,.hub-flow,.hub-publishing article){background:#f8fafd;color:var(--text);border-color:var(--line)}
+[data-theme=light] :is(.btn.primary,.primary){background:#7144a0;color:#fff;border-color:#7144a0}
+[data-theme=light] :is(.btn,.link-btn,.side-nav a,.hub-tabs button,.hub-environments button,.shape-item):hover{background:#e9e2f3;color:#4f287b;border-color:#9877b8}
+[data-theme=light] .btn.primary:hover{background:#5d3488;color:#fff}
+[data-theme=light] :is(.side-nav a.active,.hub-tabs button[aria-current],.btn.selected){background:#eee6f7;color:#5d3488;border-color:#aa8dc9;box-shadow:inset 3px 0 #7144a0}
+[data-theme=light] :is(.service-name,.brand strong,h1,h2,h3,.executive-card strong,.status-card strong,.executive-ring-row strong){color:#1b2b42}
+[data-theme=light] :is(.eyebrow,.back,.portal-credit a,.architecture-shortcut){color:#68408f}
+[data-theme=light] :is(.hub-chip,.env,.service-directory-table .env,.count,.resource-kind){background:#edf1f7;color:#3a506c;border-color:#cbd5e1}
+[data-theme=light] :is(.hub-finding,.hub-notice,#inventory-notice){color:#775216!important;background:#fff8e9;border-color:#e0c792}
+[data-theme=light] .hub-finding{padding:12px;border-radius:6px;margin-top:8px}
+[data-theme=light] :is(.hub-metric strong,.hub-metric:nth-child(2) strong,.hub-metric:nth-child(3) strong,.hub-metric:nth-child(4) strong){color:#334b6a}
+[data-theme=light] .hub-metric:first-child strong{color:#7144a0}
+[data-theme=light] :is(.service-directory-table tbody tr:hover,.service-directory-table tbody tr:focus-within){background:#f1f4fa}
+[data-theme=light] :is(.hub-diagram,#viewport){background-color:#f8fafd;background-image:radial-gradient(#c9d3e2 .7px,transparent .7px);background-size:20px 20px;border-color:var(--line)}
+[data-theme=light] :is(.danger,.remove-row){color:#a62e3f;border-color:#e6b8bf;background:#fff4f5}
+[data-theme=light] :is(.portal-credit,.side-label,.side-nav a,.sub-code,.empty p,.hub-tabs button,.editor-status,.shape-item small,.group-member span){color:var(--muted)}
+[data-theme=light] .executive-card{background-image:none}
+@media(max-width:720px){.asset-results article{flex-wrap:wrap}.asset-results article>div{flex-basis:100%}.hub-finding{align-items:flex-start;flex-direction:column}.arch-actions{flex-wrap:wrap}}
+
+[data-theme=light] :is(.executive-card>b,.group-popup-member small,.group-popup-member span span,.group-dialog p,#inspector p,#shape-library p,.editor-back){color:#56657a}
+[data-theme=light] :is(.mini-add,.nav-count){background:#eee6f7;color:#5d3488;border-color:#c6b3dc}
+[data-theme=light] td{border-color:var(--line)}
+[data-theme=light] .executive-ring{background:conic-gradient(#218467 var(--progress),#e2e8f0 0)}
+[data-theme=light] .executive-card:nth-child(4) .executive-ring{background:conic-gradient(#a57024 var(--progress),#e2e8f0 0)}
+[data-theme=light] .executive-stack{background:#e2e8f0}
+[data-theme=light] .executive-bars i{background:#587bac}
+[data-theme=light] .tag{background:#e5f3ec;color:#23644a}
+[data-theme=light] .tag.planning{background:#fff1d8;color:#78501d}
+[data-theme=light] .tag.inactive{background:#edf0f4;color:#4b596a}
+[data-theme=light] .error,[data-theme=light] #connection-error{color:#a62e3f}
+[data-theme=light] .service-name:hover{color:#7144a0}
+[data-theme=light] .back{background:#fff;color:#4a5f78;border-color:var(--line)}
+[data-theme=light] .service-actions .architecture-shortcut{background:#eaf2f5;color:#285669;border-color:#c3d8df}
+[data-theme=light] :is(#inspector label,.shape-section h3,.all-shapes summary,.group-member small){color:#4f6179}
+[data-theme=light] .shape-tile{background:#f4f7fb;border-color:#d1dbe8;color:#2c405b}
+[data-theme=light] .shape-tile:hover{background:#e9eff8;border-color:#8aa2c4}
