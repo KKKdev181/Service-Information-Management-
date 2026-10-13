@@ -9,3 +9,18 @@
 @media(max-width:720px){.sidebar{display:none}.content{padding:20px 14px}.page-head{display:block}.head-buttons{margin-top:16px}.form-fields{grid-template-columns:1fr 1fr}.modal-backdrop{padding:8px}.modal{max-height:96vh}.modal-head,.modal-footer,.modal-body{padding:16px}.impact-grid,.quality-list{grid-template-columns:1fr}.overview-row{align-items:flex-start;flex-direction:column}.quality-heading{align-items:flex-start;flex-direction:column}.impact-summary{grid-template-columns:1fr}.toolbar select{flex:1}.status-links{flex-wrap:wrap}}
 @media(max-width:440px){.status-cards.executive-cards,.form-fields{grid-template-columns:1fr}.import-list>div{flex-direction:column}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+
+/* Shared interaction states: every action has a visible target and clear feedback. */
+.ui-icon{display:inline-block;width:20px;height:20px;flex-shrink:0;vertical-align:middle;pointer-events:none}
+a[href],button:not(:disabled),summary{cursor:pointer}
+.btn,.link-btn,.back,.editor-back,.side-nav a,.hub-tabs button,.status-card,.hub-environments button{transition:background-color .16s ease,border-color .16s ease,color .16s ease,box-shadow .16s ease,transform .16s ease}
+.link-btn,.back{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:9px 12px;border:1px solid #475269;border-radius:8px;background:#252d40;color:#e5d8ff;font-size:13px;font-weight:600;line-height:1.3;white-space:nowrap}
+.link-btn:hover,.back:hover{background:#3c3454;border-color:#a790ce;color:#fff;box-shadow:0 3px 12px #0002}
+.link-btn:active,.back:active,.btn:active,.editor-back:active{transform:translateY(1px);box-shadow:none}
+.link-btn:focus-visible,.back:focus-visible,.btn:focus-visible,a:focus-visible,button:focus-visible{outline:3px solid #c3b0ed;outline-offset:3px}
+.btn:disabled{cursor:not-allowed}.back{margin-bottom:20px;color:#d5dfef;background:#1b2433}
+.service-actions .link-btn{margin:3px 4px 3px 0}.service-actions .architecture-shortcut{display:inline-flex;background:#223a43;color:#b8eced;border-color:#42636a}.service-actions .architecture-shortcut:hover{background:#30505c;border-color:#80cdd3;color:#fff}
+.service-name:hover{color:#e0c9ff;text-decoration:underline;text-underline-offset:4px}
+.status-card:hover{box-shadow:0 6px 20px #0003;transform:translateY(-2px)}.status-card:active{transform:translateY(0)}
+.executive-card>b{display:flex;align-items:center;gap:7px}.executive-card>b .ui-icon{width:16px;height:16px}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}.status-card:hover,.btn:active,.link-btn:active,.back:active{transform:none}}
