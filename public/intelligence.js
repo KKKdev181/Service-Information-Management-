@@ -1,5 +1,5 @@
 import {serviceFacts,traceDependencies} from './service-facts.js';
-import {applyServerRules} from './server-rules.js';
+import {applyServerRules,serverLocation} from './server-rules.js';
 const lower = value => String(value ?? '').trim().toLowerCase();
 const pieces = value => String(value ?? '').split(/[\s,\u060c;·]+/).map(x => x.trim()).filter(Boolean);
 const ipPattern = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
@@ -39,20 +39,19 @@ export function inspectServices(services) {
   const serverIps=new Map();
   for (const record of services) {
     const s=record.service;
-    const push=(kind,message)=>findings.push({serviceId:s.id,serviceName:s.name,kind,message});
-    for(const message of applyServerRules(structuredClone(record)).conflicts)push('review',message);
+    const push=(kind,message,section='service')=>findings.push({serviceId:s.id,serviceName:s.name,kind,message,section});
+    for(const message of applyServerRules(structuredClone(record)).conflicts)push('review',message,'Servers');
     if(!s.code)push('missing','CODE is not recorded');
-    if(!(record.Servers||[]).length&&!(record.Components||[]).length)push('missing','No infrastructure inventory recorded');
+    if(!(record.Servers||[]).length&&!(record.Components||[]).length)push('missing','No infrastructure inventory recorded','Servers');
     const facts=serviceFacts(record);
     if(facts.platform==='Not specified')push('missing','Hosting platform is not recorded');
     if(!facts.locations.length)push('missing','Hosting location is not recorded');
     if(facts.declaredServers&&Number(facts.declaredServers)!==facts.servers)push('review',`Declared server count (${facts.declaredServers}) differs from inventory (${facts.servers})`);
-    for(const flow of record.Connections||[])if(!(flow.sourceIp||flow.sourceHost||flow.source)||!(flow.destinationIp||flow.destinationHost||flow.destination))push('missing','A connection is missing its source or destination');
-    if(!(record.Endpoints||[]).length)push('missing','No endpoints or publishing details recorded');
+    for(const flow of record.Connections||[])if(!(flow.sourceIp||flow.sourceHost||flow.source)||!(flow.destinationIp||flow.destinationHost||flow.destination))push('missing','A connection is missing its source or destination','Connections');
     const ownIps=new Set((record.Servers||[]).flatMap(server=>[server.privateIp,server.publicIp].flatMap(ips)));
     for(const lb of record.LoadBalancers||[]) {
       const backend=ips(lb.hostIp||lb.members)[0];
-      if(backend && ownIps.size && !ownIps.has(backend))push('review',`Load balancer backend ${backend} does not match any recorded server IP; review the inventory`);
+      if(backend && ownIps.size && !ownIps.has(backend))push('review',`Load balancer backend ${backend} does not match any recorded server IP; review the inventory`,'LoadBalancers');
     }
     for(const server of record.Servers||[])for(const ip of [server.privateIp,server.publicIp].flatMap(ips)){
       const key=lower(ip);if(!serverIps.has(key))serverIps.set(key,new Map());
@@ -60,7 +59,7 @@ export function inspectServices(services) {
     }
   }
   for(const [ip,owners] of serverIps)if(owners.size>1){
-    for(const [id,name] of owners)findings.push({serviceId:id,serviceName:name,kind:'review',message:`Server IP ${ip} is recorded in multiple services: ${[...owners.values()].join(', ')}`});
+    for(const [id,name] of owners)findings.push({serviceId:id,serviceName:name,kind:'review',section:'Servers',message:`Server IP ${ip} is recorded in multiple services: ${[...owners.values()].join(', ')}`});
   }
   return findings;
 }
@@ -80,4 +79,15 @@ export function traceImpact(services, rawQuery) {
   for(const e of additional){const key=JSON.stringify([e.serviceId,e.source,e.destination,e.type,e.port]);if(!flowKeys.has(key)){matchedFlows.push(e);flowKeys.add(key);}}
   const ids=new Set([...direct.map(r=>r.serviceId),...matchedFlows.map(f=>f.serviceId),...directServices.map(s=>s.service.id)]);
   return {resources:direct,flows:matchedFlows,services:services.filter(s=>ids.has(s.service.id)).map(s=>({id:s.service.id,name:s.service.name,code:s.service.code}))};
+}
+
+// Row-level search avoids duplicate results when several fields match one asset.
+export function searchAssets(records,rawQuery){
+ const q=lower(rawQuery);if(!q)return [];
+ const result=[];
+ for(const record of records)for(const section of ['Servers','Components','Endpoints','LoadBalancers','Networks','Connections'])for(const row of record[section]||[]){
+ const entries=Object.entries(row).filter(([key,value])=>!['id','serviceId'].includes(key)&&String(value??'').trim());
+ if(!entries.some(([,value])=>lower(value).includes(q)))continue;
+ result.push({serviceId:record.service.id,serviceName:record.service.name,section,label:row.name||row.url||row.dns||row.vip||row.sourceHost||row.sourceIp||'Recorded connection',address:row.privateIp||row.publicIp||row.vip||row.hostIp||row.range||'',environment:row.environment||'Not recorded',location:serverLocation(row)||'Not recorded',match:entries.filter(([,v])=>lower(v).includes(q)).map(([k,v])=>k+': '+v).join(' · ')});
+ }return result;
 }
