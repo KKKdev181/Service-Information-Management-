@@ -43,3 +43,14 @@
 [data-theme=light] :is(#inspector label,.shape-section h3,.all-shapes summary,.group-member small){color:#4f6179}
 [data-theme=light] .shape-tile{background:#f4f7fb;border-color:#d1dbe8;color:#2c405b}
 [data-theme=light] .shape-tile:hover{background:#e9eff8;border-color:#8aa2c4}
+
+/* Strong canvas separation and readable navigation in both appearances. */
+[data-theme=light] .editor-brand>.editor-back{background:#f2edf8;color:#593281;border-color:#baa5d1;box-shadow:0 1px 2px #293b5010}
+[data-theme=light] .editor-brand>.editor-back:hover{background:#e7dcf2;color:#452166;border-color:#8e6aaf}
+[data-theme=light] .editor-brand>.editor-back:focus-visible{outline:3px solid #7144a0;outline-offset:3px}
+[data-theme=light] .editor-brand #state{color:#596a81}
+[data-theme=light] #viewport{background-color:#e5ebf3;background-image:radial-gradient(#b7c4d5 .8px,transparent .8px);background-size:20px 20px;box-shadow:inset 0 1px 5px #263c5410}
+[data-theme=dark] #viewport{background-color:#101925;background-image:radial-gradient(#33455c .8px,transparent .8px)}
+[data-theme=light] .hub-diagram{background-color:#e5ebf3}
+.arch-node:hover .component-boundary{stroke-width:2.5}
+.arch-node:focus-visible .component-boundary{stroke:#8e6cb5;stroke-width:3}
