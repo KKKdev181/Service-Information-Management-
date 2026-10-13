@@ -62,3 +62,15 @@ test('separate components remain independent beside groups and retain exact conn
  assert.equal(grouped.membership.get('a').id,grouped.membership.get('b').id);
  assert.equal(saved.edges.length,2);
 });
+
+test('hosting locations remain distinct and their identities survive validation',()=>{
+ const graph={nodes:['GCP','NIC','SALAM','DR'].map((site,i)=>({id:'vm-'+i,type:'VM',label:site+' VM',environment:'Production',hostingLocation:site,displayMode:'grouped',x:0,y:0})),edges:[]};
+ const saved=validateGraph(graph),view=groupArchitecture(saved);
+ assert.equal(view.groups.length,4);
+ assert.deepEqual(view.nodes.map(n=>n.hostingLocation),['GCP','NIC','SALAM','DR']);
+ assert.equal(new Set(view.nodes.map(n=>n.id)).size,4);
+ assert.deepEqual(saved.nodes.map(n=>n.hostingLocation),['GCP','NIC','SALAM','DR']);
+ assert.equal(roleFor({type:'MPLS'}),'Integrations');
+ assert.equal(roleFor({type:'GSN'}),'Integrations');
+ assert.equal(roleFor({type:'Docker'}),'Applications');
+});
