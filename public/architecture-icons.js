@@ -35,7 +35,16 @@ const icons = {
 // Strong silhouettes remain recognizable when a large diagram is zoomed out.
 icons['Load Balancer'] = `<circle cx="32" cy="30" r="24" fill="#123e4b" stroke="#55dfdf" stroke-width="2"/><path d="M32 12v12M32 24 17 39m15-15 15 15M32 24v23M12 34l5 5 5-5m20 0 5 5 5-5m-25 8 5 5 5-5" fill="none" stroke="#8cffff" stroke-width="3"/>`;
 icons.API = `<path d="m32 3 26 15v29L32 62 6 47V18Z" fill="#493621" stroke="#f0bc69" stroke-width="2"/><path d="m23 23-9 9 9 9m18-18 9 9-9 9m-5-22-8 26" fill="none" stroke="#ffda9e" stroke-width="3"/>`;
-icons.OpenShift = `<path d="M49 17a23 23 0 1 0 0 30" fill="none" stroke="#ff7e8a" stroke-width="10"/><path d="m41 11 15 10M41 53l15-10" stroke="#ffacb4" stroke-width="7"/><path d="M6 27h14M6 38h14" stroke="#832f43" stroke-width="5"/>`;
+// Official Red Hat technology icon, unchanged artwork. Source: https://raw.githubusercontent.com/RedHatInsights/frontend-assets/master/src/technology-icons/openshift.svg
+icons.OpenShift = `<svg x="0" y="0" width="64" height="64" viewBox="0 0 38 38">
+  <path d="M28,1H10a9,9,0,0,0-9,9V28a9,9,0,0,0,9,9H28a9,9,0,0,0,9-9V10a9,9,0,0,0-9-9Z"/>
+  <path fill="#fff" d="M10.09863,22.18994a.625.625,0,0,1-.25488-1.1958l2.74072-1.22021a.62492.62492,0,1,1,.50879,1.1416l-2.74072,1.22021A.619.619,0,0,1,10.09863,22.18994Z"/>
+  <path fill="#fff" d="M8.832,25.49072a.625.625,0,0,1-.25488-1.1958l2.74023-1.22021a.62492.62492,0,1,1,.50879,1.1416L9.08594,25.43652A.61731.61731,0,0,1,8.832,25.49072Z"/>
+  <path fill="#fff" d="M26.42773,14.91943a.62473.62473,0,0,1-.2539-1.1958L28.915,12.50342a.62472.62472,0,1,1,.50781,1.1416l-2.74121,1.22021A.61563.61563,0,0,1,26.42773,14.91943Z"/>
+  <path fill="#fff" d="M25.16113,18.22021a.62473.62473,0,0,1-.2539-1.1958l2.74023-1.22021a.62472.62472,0,1,1,.50781,1.1416L25.415,18.166A.61581.61581,0,0,1,25.16113,18.22021Z"/>
+  <path fill="#e00" d="M18.95166,28.63379A9.593,9.593,0,0,1,12.8291,26.4165a.625.625,0,0,1,.7959-.96386,8.37943,8.37943,0,0,0,13.71289-6.1045.61006.61006,0,0,1,.65039-.59814.6249.6249,0,0,1,.59766.65088,9.65521,9.65521,0,0,1-9.63428,9.23291Z"/>
+  <path fill="#e00" d="M9.97461,19.22607l-.02881-.00048a.62539.62539,0,0,1-.59619-.65284A9.6291,9.6291,0,0,1,25.10547,11.5835a.62531.62531,0,0,1-.79688.96386,8.37815,8.37815,0,0,0-13.71,6.082A.62532.62532,0,0,1,9.97461,19.22607Z"/>
+</svg>`;
 const aliases={'Physical Server':'Server','Windows Server':'Server','Linux Server':'Server',Oracle:'Database','SQL Server':'Database',PostgreSQL:'Database',Redis:'Database','S3 / MinIO':'Storage','API Gateway':'API',DataPower:'API','3scale':'API',Apigee:'API',Proxy:'Router',Kafka:'Message Queue'};
 export function icon(type){return `<g stroke-linecap="round" stroke-linejoin="round">${icons[aliases[type]||type]||icons.Server}</g>`;}
 
@@ -57,3 +66,16 @@ export function componentType(node) {
  return node.type;
 }
 export function componentColor(type) { return palette[aliases[type] || type] || '#a7b7cf'; }
+
+icons.Docker = `<path d="M5 29h43c3-6 8-8 12-6-2 5-5 9-10 10-3 15-13 23-29 20C9 51 5 42 5 29Z" fill="#2496ed"/><path d="M49 27c-2-7 0-10 3-13 4 4 6 9 3 13" fill="#2496ed"/>${[[9,20],[19,20],[29,20],[19,10],[29,10],[39,20]].map(([x,y])=>`<rect x="${x}" y="${y}" width="8" height="7" rx="1" fill="#7dc8ff"/>`).join('')}<circle cx="13" cy="35" r="2" fill="white"/>`;
+icons.MPLS = `${cloud}<path d="M12 35 31 18 51 35 31 47Z M12 35h39M31 18v29" fill="none" stroke="#80e6ff" stroke-width="2"/>${[[12,35],[31,18],[51,35],[31,47]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="4" fill="#b9f4ff"/>`).join('')}`;
+icons.GSN = `<path d="M6 23 32 7l26 16Z" fill="#2e9d84" stroke="#9ae6cc"/><path d="M9 49h46v7H9Z" fill="#287d6d"/>${[14,28,42].map(x=>`<rect x="${x}" y="26" width="7" height="22" fill="#8bdfc5"/>`).join('')}<circle cx="51" cy="47" r="10" fill="#163c35" stroke="#88e0c5"/><path d="m46 47 4 4 6-8" stroke="#a9f3d9" stroke-width="2" fill="none"/>`;
+palette.MPLS='#78dbfa';palette.GSN='#8bdfc5';
+const hostingIcons={
+ GCP:`<path d="M12 44C2 38 6 25 17 24" fill="none" stroke="#4285f4" stroke-width="8"/><path d="M17 24C15 9 37 6 44 23" fill="none" stroke="#ea4335" stroke-width="8"/><path d="M44 23c16-2 20 20 5 23" fill="none" stroke="#fbbc05" stroke-width="8"/><path d="M12 46h37" stroke="#34a853" stroke-width="8"/>`,
+ NIC:`<path d="M8 22 32 6l24 16Z" fill="#90c6fa"/><path d="M8 53h48M13 25v23m13-23v23m13-23v23m13-23v23" stroke="#90c6fa" stroke-width="5"/>`,
+ SALAM:`<path d="m20 55 12-38 12 38M23 44h18" fill="none" stroke="#80e2bc" stroke-width="4"/><circle cx="32" cy="15" r="4" fill="#80e2bc"/><path d="M20 6a16 16 0 0 0 0 22M44 6a16 16 0 0 1 0 22M12 1a24 24 0 0 0 0 33M52 1a24 24 0 0 1 0 33" fill="none" stroke="#80e2bc" stroke-width="2"/>`,
+ DR:`${icons['DR Site']}<path d="M10 8h37l-5-5m5 5-5 5" fill="none" stroke="#ffc581" stroke-width="3"/>`
+};
+export function hostingIcon(site){return hostingIcons[site]||'';}
+for(const site of ['GCP','NIC','SALAM','DR'])icons[site+' VM']=`${icons.VM}<g transform="translate(36,33) scale(.45)">${hostingIcons[site]}</g>`;
