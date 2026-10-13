@@ -26,7 +26,8 @@ export function arrangeArchitecture(graph){
  for(const row of layers){if(!row.length){top+=60;continue;}const width=row.length*cellW-110;row.forEach((n,i)=>{n.x=60+(rowWidth-width)/2+i*cellW+(cellW-110-(n.width||224))/2;n.y=top;});top+=cellH;}
  return graph;
 }
-export function renderArchitecture(graph,selected,linkSource){
+export function renderArchitecture(graph,selected,linkSource,theme='dark'){
+ const equipment=[];const art=markup=>{equipment.push(markup);return `__EQUIPMENT_${equipment.length-1}__`;};
  const labelBoxes=[],labelMarkup=[];let routeRight=0;
  const overlaps=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
  function placeLabel(text,x,y){
@@ -71,10 +72,10 @@ export function renderArchitecture(graph,selected,linkSource){
  // Transparent hit area preserves dragging; the equipment is the visible silhouette.
  return `<g class="arch-node ${active?'is-selected':''}" data-node="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(type+': '+n.label)}" transform="translate(${n.x},${n.y})" opacity="${selected?.kind==='node'&&!active&&!linked.has(n.id)?.65:1}">
  <rect width="${nw}" height="${nh}" rx="10" fill="none" pointer-events="all" stroke="${active?'#f0e4ff':'none'}" stroke-width="2" stroke-dasharray="${active?'5 4':'none'}"/>
- <g transform="translate(4,0) scale(1.13)">${icon(type)}</g>
+ <g transform="translate(4,0) scale(1.13)">${art(icon(type))}</g>
  <text x="82" y="27" font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="15" font-weight="600" fill="${color}">${esc(type)}</text>
  <text x="82" y="48" font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="13" fill="#bac7d9">${esc(n.environment||'Not specified')}</text>
- ${n.hostingLocation?`<g transform="translate(82,51) scale(.25)">${hostingIcon(n.hostingLocation)}</g><text x="103" y="64" font-size="11" font-family="Segoe UI,Arial,sans-serif" fill="#e0ebfa">${esc(n.hostingLocation)}</text>`:`<path d="M83 60h28" stroke="${color}" stroke-width="3" stroke-linecap="round"/>`}
+ ${n.hostingLocation?`<g transform="translate(82,51) scale(.25)">${art(hostingIcon(n.hostingLocation))}</g><text x="103" y="64" font-size="11" font-family="Segoe UI,Arial,sans-serif" fill="#e0ebfa">${esc(n.hostingLocation)}</text>`:`<path d="M83 60h28" stroke="${color}" stroke-width="3" stroke-linecap="round"/>`}
  <text x="${nw/2}" y="85" text-anchor="middle" font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="16" font-weight="600" fill="#f1f5f9">${esc(n.label.length>Math.floor(nw/8.5)?n.label.slice(0,Math.floor(nw/8.5)-1)+'…':n.label)}</text>
  <text x="${nw/2}" y="106" text-anchor="middle" font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="14" fill="#c8d5e6">${esc((n.ip||'').slice(0,Math.floor(nw/8)))}</text>
  ${n.isGroup?`<g class="group-expand" data-expand-group="${esc(n.id)}" tabindex="0" role="button" aria-label="View components in ${esc(n.label)}" transform="translate(${nw-38},8)"><rect width="30" height="30" rx="6" fill="#25354b" stroke="#7897bc"/><path d="M8 13V8h5M17 8h5v5M22 17v5h-5M13 22H8v-5" stroke="#d4e6ff" stroke-width="1.8" fill="none"/><title>View components</title></g>`:''}
@@ -83,5 +84,12 @@ export function renderArchitecture(graph,selected,linkSource){
  <title>${esc(type+' · '+n.label+' '+(n.ip||''))}</title></g>`;
  }).join('');
  svg+=labelMarkup.join('');
+ if(theme==='light'){
+ const colors={'#80e9ef':'#236178','#d5bcff':'#7044a5','#f0e4ff':'#7044a5','#161a21':'#edf1f7','#363e4b':'#bac6d6','#c8d8e8':'#475569','#1d222b':'#ffffff','#ffffff':'#17263c','#bac7d9':'#475569','#e0ebfa':'#334155','#f1f5f9':'#17263c','#c8d5e6':'#475569'};
+ // Change text and diagram surfaces only; preserve the equipment brand artwork.
+ svg=svg.replace(/<(text|tspan|rect|path)\b[^>]*>/g,tag=>tag.replace(/(fill|stroke)="(#[a-fA-F0-9]{6})"/g,(all,attr,color)=>colors[color]?`${attr}="${colors[color]}"`:all));
+ svg=svg.replace(/(<text[^>]*fill=")[^"]+("[^>]*>)/g,'$1#24364d$2');
+ }
+ svg=svg.replace(/__EQUIPMENT_(\d+)__/g,(_,i)=>equipment[Number(i)]);
  return {svg,w:Math.max(w,routeRight,...(graph.arrows||[]).flatMap(a=>[a.x1+30,a.x2+30]),...labelBoxes.map(b=>b.x+b.w+20)),h:Math.max(h,...(graph.arrows||[]).flatMap(a=>[a.y1+30,a.y2+30]),...labelBoxes.map(b=>b.y+b.h+20))};
 }
