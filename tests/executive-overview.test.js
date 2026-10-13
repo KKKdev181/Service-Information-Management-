@@ -1,0 +1,9 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {executiveModel,renderExecutive} from '../public/executive-overview.js';
+const now=Date.parse('2026-10-13T12:00:00Z');
+const record=(id,locations,environments,extra={})=>({service:{id,name:id,hostingLocations:locations,hostingType:'Hybrid',...extra},Servers:environments.map(environment=>({environment})),Components:[],Endpoints:[],LoadBalancers:[]});
+const records=[record('one','NIC,GCP',['Production','Production','DR'],{createdAt:'2026-10-01',updatedAt:'2026-10-12'}),record('two','NIC',['Production'],{createdAt:'2026-12-01',updatedAt:'2026-01-01'}),record('three','',[],{})];
+test('portfolio counts unique services across overlapping sites and environments',()=>{const m=executiveModel(records,{now});assert.deepEqual(m.metrics.map(g=>g.rows.length),[3,2,1,1]);assert.equal(m.hosting.find(g=>g.label==='NIC').rows.length,2);assert.equal(m.environments.find(g=>g.label==='Production').rows.length,2);assert.deepEqual(m.attention.map(g=>g.rows.length),[1,1,1,1]);assert.equal(m.unknownCreated,1);});
+test('site and environment filters scope all metrics, priorities and update lists',()=>{const m=executiveModel(records,{now,site:'GCP',environment:'Production'});assert.equal(m.rows.length,1);assert.equal(m.metrics[2].rows.length,1);assert.equal(m.attention[0].rows.length,0);assert.deepEqual(m.recent.map(x=>x.service.id),['one']);assert.equal(executiveModel(records,{now,site:'SALAM'}).rows.length,0);});
+test('render handles empty data and escapes labels in drill-down and recent records',()=>{assert.match(renderExecutive([]),/No hosting locations recorded/);const html=renderExecutive([record('bad<script>','NIC',['Production'],{updatedAt:'2026-10-01'})],{category:'all'});assert.ok(!html.includes('<script>'));assert.match(html,/bad&lt;script&gt;/);assert.match(html,/service=bad%3Cscript%3E/);assert.match(html,/not a complete change history/);});
