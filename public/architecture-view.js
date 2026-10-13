@@ -77,6 +77,7 @@ export function renderArchitecture(graph,selected,linkSource){
  <path d="M83 60h28" stroke="${color}" stroke-width="3" stroke-linecap="round"/>
  <text x="${nw/2}" y="85" text-anchor="middle" font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="16" font-weight="600" fill="#f1f5f9">${esc(n.label.length>Math.floor(nw/8.5)?n.label.slice(0,Math.floor(nw/8.5)-1)+'…':n.label)}</text>
  <text x="${nw/2}" y="106" text-anchor="middle" font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="14" fill="#c8d5e6">${esc((n.ip||'').slice(0,Math.floor(nw/8)))}</text>
+ ${n.isGroup?`<g class="group-expand" data-expand-group="${esc(n.id)}" tabindex="0" role="button" aria-label="View components in ${esc(n.label)}" transform="translate(${nw-38},8)"><rect width="30" height="30" rx="6" fill="#25354b" stroke="#7897bc"/><path d="M8 13V8h5M17 8h5v5M22 17v5h-5M13 22H8v-5" stroke="#d4e6ff" stroke-width="1.8" fill="none"/><title>View components</title></g>`:''}
  ${n.groupId?'':`<path data-resize="true" d="M${nw-12} ${nh-3}h9v-9" stroke="${color}" stroke-width="3" fill="none" style="cursor:nwse-resize"/>`}
  ${[[nw/2,0],[nw,nh/2],[nw/2,nh],[0,nh/2]].map(([x,y])=>`<g class="connection-handle" data-connect-handle="${esc(n.id)}" transform="translate(${x},${y})"><circle r="12" fill="#10263d" stroke="#78c8ff" stroke-width="2"/><path d="M-5 0h10M0-5v10" stroke="#bde9ff" stroke-width="2"/><title>Drag to connect</title></g>`).join('')}
  <title>${esc(type+' · '+n.label+' '+(n.ip||''))}</title></g>`;
