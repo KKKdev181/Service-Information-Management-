@@ -26,6 +26,19 @@ export function arrangeArchitecture(graph){
  for(const row of layers){if(!row.length){top+=60;continue;}const width=row.length*cellW-110;row.forEach((n,i)=>{n.x=60+(rowWidth-width)/2+i*cellW+(cellW-110-(n.width||224))/2;n.y=top;});top+=cellH;}
  return graph;
 }
+// Boundaries describe function; geometry stays within the existing connection anchors.
+export function componentBoundary(node,width,height,theme='dark',active=false){
+ const type=componentType(node),role=node.architectureRole||'';
+ const family=role==='Databases'||['Database','Oracle','SQL Server','PostgreSQL','Redis'].includes(type)?'data':role==='Security'||['Firewall','WAF'].includes(type)?'security':role==='Storage'||['Storage','S3 / MinIO','Backup'].includes(type)?'storage':['OpenShift','Docker','Kubernetes','Container'].includes(type)?'platform':['User','Internet','External','External System','Cloud','URL'].includes(type)?'external':role==='Load Balancers'||['Load Balancer','Switch','VPN','MPLS','GSN','NAT','DNS','Proxy','API Gateway'].includes(type)?'network':'compute';
+ const palette={compute:['#f7f4fe','#7962ac','#252238'],data:['#effaf5','#35856e','#19332e'],security:['#fff6ed','#b2743b','#36291f'],storage:['#eff8fa','#437e91','#1b3039'],platform:['#fff2f4','#b66072','#36232d'],external:['#f4f6fa','#718099','#252d3a'],network:['#eef7fe','#427aa4','#1c2e40']}[family];
+ const fill=theme==='light'?palette[0]:palette[2],stroke=active?(theme==='light'?'#7144a0':'#d4b9ff'):palette[1],w=width,h=height;
+ const attrs=`class="component-boundary" fill="${fill}" stroke="${stroke}" stroke-width="${active?2.8:1.6}"`;
+ let shape;
+ if(family==='data')shape=`<path ${attrs} d="M1 10 C1 -2 ${w-1} -2 ${w-1} 10 V${h-10} C${w-1} ${h+2} 1 ${h+2} 1 ${h-10}Z"/><path d="M1 ${h-12} C1 ${h} ${w-1} ${h} ${w-1} ${h-12}" fill="none" stroke="${stroke}" opacity=".5"/>`;
+ else if(family==='security')shape=`<path ${attrs} d="M13 1 H${w-13} L${w-1} 13 V${h-13} L${w-13} ${h-1} H13 L1 ${h-13} V13Z"/>`;
+ else shape=`<rect ${attrs} x="1" y="1" width="${w-2}" height="${h-2}" rx="${family==='external'?26:family==='network'?17:8}" ${family==='platform'?'stroke-dasharray="7 3"':''}/>${family==='storage'?`<path d="M7 ${h-8}H${w-7}M7 ${h-4}H${w-7}" stroke="${stroke}" opacity=".5"/>`:''}`;
+ return `<g data-boundary="${family}" pointer-events="none">${shape}</g>`;
+}
 export function renderArchitecture(graph,selected,linkSource,theme='dark'){
  const equipment=[];const art=markup=>{equipment.push(markup);return `__EQUIPMENT_${equipment.length-1}__`;};
  const labelBoxes=[],labelMarkup=[];let routeRight=0;
@@ -69,9 +82,11 @@ export function renderArchitecture(graph,selected,linkSource,theme='dark'){
  svg+=graph.nodes.map(n=>{
  const nw=n.width||W,nh=n.height||H,type=componentType(n),color=componentColor(type);
  const active=selected?.id===n.id||linkSource===n.id;
- // Transparent hit area preserves dragging; the equipment is the visible silhouette.
+ const boundaryRole=graph.groups?.find(g=>g.id===n.id)?.role||n.architectureRole;
+ // Keep hit targets above the decorative boundary for dragging and linking.
  return `<g class="arch-node ${active?'is-selected':''}" data-node="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(type+': '+n.label)}" transform="translate(${n.x},${n.y})" opacity="${selected?.kind==='node'&&!active&&!linked.has(n.id)?.65:1}">
- <rect width="${nw}" height="${nh}" rx="10" fill="none" pointer-events="all" stroke="${active?'#f0e4ff':'none'}" stroke-width="2" stroke-dasharray="${active?'5 4':'none'}"/>
+ ${art(componentBoundary({...n,architectureRole:boundaryRole},nw,nh,theme,active))}
+ <rect width="${nw}" height="${nh}" rx="10" fill="none" pointer-events="all" stroke="none"/>
  <g transform="translate(4,0) scale(1.13)">${art(icon(type))}</g>
  <text x="82" y="27" font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="15" font-weight="600" fill="${color}">${esc(type)}</text>
  <text x="82" y="48" font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="13" fill="#bac7d9">${esc(n.environment||'Not specified')}</text>
