@@ -9,18 +9,19 @@ $('type').innerHTML=types.map(t=>`<option>${esc(t)}</option>`).join('');
 const serviceId=new URLSearchParams(location.search).get('service');
 let record,graph={revision:0,nodes:[],edges:[]},selected=null,linkMode=false,linkSource=null,zoom=1,dirty=false,epoch=0,drag=null,ready=false;
 const grouped=true;
-let handTool=false,spacePan=false,pendingTarget=null;
+let arrowTool=false,handTool=false,spacePan=false,pendingTarget=null;
 let history=[],historyIndex=-1;
-const snapshot=()=>JSON.stringify({nodes:graph.nodes,edges:graph.edges,positions:graph.positions||[],inventorySignature:graph.inventorySignature||''});
+const snapshot=()=>JSON.stringify({nodes:graph.nodes,edges:graph.edges,positions:graph.positions||[],arrows:graph.arrows||[],inventorySignature:graph.inventorySignature||''});
 function historyButtons(){$('undo').disabled=historyIndex<=0;$('redo').disabled=historyIndex>=history.length-1;}
 function remember(){const value=snapshot();if(history[historyIndex]!==value){history=history.slice(0,historyIndex+1);history.push(value);if(history.length>60)history.shift();historyIndex=history.length-1;}historyButtons();}
 function travelHistory(delta){if(!ready||gesture)return;const next=historyIndex+delta;if(next<0||next>=history.length)return;Object.assign(graph,JSON.parse(history[next]));historyIndex=next;epoch++;dirty=true;projection=null;selected=null;linkMode=false;linkSource=null;pendingTarget=null;status('Unsaved changes');historyButtons();draw();inspector();}
 $('undo').onclick=()=>travelHistory(-1);$('redo').onclick=()=>travelHistory(1);
-function setTool(hand){handTool=hand;stopConnecting();$('tool-select').classList.toggle('selected',!hand);$('tool-pan').classList.toggle('selected',hand);$('tool-select').setAttribute('aria-pressed',String(!hand));$('tool-pan').setAttribute('aria-pressed',String(hand));$('viewport').classList.toggle('hand-tool',hand);}
+function setTool(hand){arrowTool=false;$('draw-arrow').classList.remove('selected');$('draw-arrow').setAttribute('aria-pressed','false');handTool=hand;stopConnecting();$('tool-select').classList.toggle('selected',!hand);$('tool-pan').classList.toggle('selected',hand);$('tool-select').setAttribute('aria-pressed',String(!hand));$('tool-pan').setAttribute('aria-pressed',String(hand));$('viewport').classList.toggle('hand-tool',hand);}
+$('draw-arrow').onclick=()=>{const next=!arrowTool;setTool(false);arrowTool=next;$('draw-arrow').classList.toggle('selected',next);$('draw-arrow').setAttribute('aria-pressed',String(next));draw();};
 $('tool-select').onclick=()=>setTool(false);$('tool-pan').onclick=()=>setTool(true);
 $('layout').onclick=()=>{if(!ready)return;graph.positions=[];changed();resetProjection();};
 let expanded=new Set(),projection=null,projectionEpoch=-1;
-function visibleGraph(){if(!grouped)return graph;if(!projection||projectionEpoch!==epoch){projection=groupArchitecture(graph,expanded);projectionEpoch=epoch;}return projection;}
+function visibleGraph(){if(!grouped)return graph;if(!projection||projectionEpoch!==epoch){projection=groupArchitecture(graph,expanded);projectionEpoch=epoch;}return {...projection,arrows:graph.arrows||[]};}
 function resetProjection(){projection=null;selected=null;draw();fit();inspector();}
 function focusComponent(id){
  const group=visibleGraph().groups.find(g=>g.members.some(n=>n.id===id));
@@ -45,7 +46,7 @@ function dimensions(){return renderArchitecture(visibleGraph(),null,null);}
 function draw(){
  const stale=graph.revision&&graph.inventorySignature!==inventorySignature(record);$('inventory-notice').hidden=!stale;$('inventory-notice').textContent=stale?'Inventory has changed or this diagram has no inventory baseline. Review the current records, then use Generate from records if you want to replace this drawing.':'';
 
- $('hint').textContent=linkMode?(linkSource?'2. Click the destination item':'1. Click the source item'):'Drag shapes to move · Drag blue handles to connect · Space to pan';
+ $('hint').textContent=arrowTool?'Drag anywhere to draw an arrow. No items required.':linkMode?(linkSource?'2. Click the destination item':'1. Click the source item'):'Drag shapes to move · Drag blue handles to connect · Space to pan';
  $('connect').textContent=linkMode?'Cancel connection':'Connect items';$('connect').classList.toggle('selected',linkMode);
  $('connect').setAttribute('aria-pressed',String(linkMode));
  $('diagram-count').textContent=graph.nodes.length+' components · '+graph.edges.length+' connections';
@@ -75,7 +76,8 @@ function fit(){
 }
 $('fit').onclick=fit;
 new ResizeObserver(()=>{if(ready)scheduleCamera();}).observe($('viewport'));
-function inspector(){if(!selected||selected.kind!=='node'||!graph.nodes.some(n=>n.id===selected.id)){groupInspector();return;}const item=selected&&(selected.kind==='node'?graph.nodes:graph.edges).find(x=>x.id===selected.id);if(!item){$('inspector').innerHTML='<h2>Diagram overview</h2><p>'+graph.nodes.length+' components · '+graph.edges.length+' recorded connections</p><p>Drag the corner handle to resize a component. Select a component to edit its type or zone.</p>'+graph.edges.map(e=>{const a=graph.nodes.find(n=>n.id===e.source),b=graph.nodes.find(n=>n.id===e.target);return `<p dir="ltr">${esc(a?.label)} → ${esc(b?.label)}<br><b>${esc([e.type,e.protocol,e.port].filter(Boolean).join(' · '))}</b></p>`;}).join('')+'<h2>Unconnected components</h2>'+graph.nodes.filter(n=>!graph.edges.some(e=>e.source===n.id||e.target===n.id)).map(n=>`<p>${esc(n.label)} — Relationship requires confirmation</p>`).join('');return;}
+function inspector(){if(selected?.kind==='arrow'){$('inspector').innerHTML='<h2>Arrow</h2><p>Visual annotation. No linked items.</p><button id="reverse-arrow" class="btn">Reverse direction</button><button id="delete" class="btn danger">Delete arrow</button>';$('delete').onclick=()=>{graph.arrows=(graph.arrows||[]).filter(a=>a.id!==selected.id);selected=null;changed();draw();inspector();};$('reverse-arrow').onclick=()=>{const a=graph.arrows.find(a=>a.id===selected.id);[a.x1,a.x2]=[a.x2,a.x1];[a.y1,a.y2]=[a.y2,a.y1];changed();draw();};return;}
+if(!selected||selected.kind!=='node'||!graph.nodes.some(n=>n.id===selected.id)){groupInspector();return;}const item=selected&&(selected.kind==='node'?graph.nodes:graph.edges).find(x=>x.id===selected.id);if(!item){$('inspector').innerHTML='<h2>Diagram overview</h2><p>'+graph.nodes.length+' components · '+graph.edges.length+' recorded connections</p><p>Drag the corner handle to resize a component. Select a component to edit its type or zone.</p>'+graph.edges.map(e=>{const a=graph.nodes.find(n=>n.id===e.source),b=graph.nodes.find(n=>n.id===e.target);return `<p dir="ltr">${esc(a?.label)} → ${esc(b?.label)}<br><b>${esc([e.type,e.protocol,e.port].filter(Boolean).join(' · '))}</b></p>`;}).join('')+'<h2>Unconnected components</h2>'+graph.nodes.filter(n=>!graph.edges.some(e=>e.source===n.id||e.target===n.id)).map(n=>`<p>${esc(n.label)} — Relationship requires confirmation</p>`).join('');return;}
  const node=selected.kind==='node';const fields=node?[['label','Component name'],['type','Component type / Icon'],['architectureRole','Architecture role'],['zone','Zone / Group'],['ip','IP / Address'],['environment','Environment'],['notes','Notes']]:[['source','Source'],['target','Destination'],['type','Connection type (NAT / GSN / VPN…)'],['protocol','Protocol'],['port','Port'],['notes','Notes']];
  $('inspector').innerHTML=`<h2>${node?'Component details':'Connection details'}</h2>`+fields.map(([key,label])=>`<label for="edit-${key}">${label}</label>${node&&['type','zone','architectureRole'].includes(key)?`<select id="edit-${key}">${(key==='type'?types:key==='architectureRole'?roles:zones).map(v=>`<option ${(item[key]||(key==='zone'?zoneFor(item):key==='architectureRole'?roleFor(item):''))===v?'selected':''}>${esc(v)}</option>`).join('')}</select>`:key==='environment'?`<select id="edit-${key}">${environments.map(env=>`<option ${item[key]===env?'selected':''}>${esc(env)}</option>`).join('')}</select>`:['source','target'].includes(key)?`<select id="edit-${key}">${graph.nodes.map(n=>`<option value="${esc(n.id)}" ${item[key]===n.id?'selected':''}>${esc(n.label)}</option>`).join('')}</select>`:key==='notes'?`<textarea id="edit-${key}">${esc(item[key])}</textarea>`:`<input id="edit-${key}" value="${esc(item[key])}" maxlength="1000">`}`).join('')+(node?'':'<button id="reverse" class="btn">Reverse direction</button>')+'<button id="apply" class="btn primary">Apply changes</button><button id="delete" class="btn danger">Remove from diagram</button>';
  if(node){const button=document.createElement('button');button.className='btn';button.textContent='＋ Connect from this component';button.onclick=()=>connections({source:item.id});$('inspector').prepend(button);}
@@ -110,12 +112,13 @@ $('canvas').addEventListener('pointerdown',e=>{
  if(!ready||![0,1].includes(e.button))return;
  e.preventDefault();$('canvas').focus({preventScroll:true});
  const p=localPoint(e);pointers.set(e.pointerId,p);
- const target=e.target.closest('[data-node],[data-edge]');
+ const target=e.target.closest('[data-node],[data-edge],[data-arrow]');
  if(pointers.size===1)gesture={start:p,last:p,moved:false,target,button:e.button};
- else{gesture.moved=true;gesture.item=null;gesture.connector=null;$('connector-preview')?.remove();gesture.pinch=pinchState();}
+ else{gesture.moved=true;gesture.freeArrow=null;gesture.freeMove=null;gesture.item=null;gesture.connector=null;$('connector-preview')?.remove();gesture.pinch=pinchState();}
  const handle=e.target.closest('[data-connect-handle]');
- if(pointers.size===1&&handle&&!handTool&&!spacePan&&e.button===0){gesture.connector=handle.dataset.connectHandle;gesture.item=null;}
- if(pointers.size===1&&!handle&&!handTool&&!spacePan&&!linkMode&&e.button===0&&target?.dataset.node){const n=visibleGraph().nodes.find(n=>n.id===target.dataset.node);if(n)gesture.item={id:n.id,x:n.x,y:n.y};}
+ if(pointers.size===1&&!arrowTool&&handle&&!handTool&&!spacePan&&e.button===0){gesture.connector=handle.dataset.connectHandle;gesture.item=null;}
+ if(pointers.size===1&&!arrowTool&&!handle&&!handTool&&!spacePan&&!linkMode&&e.button===0&&target?.dataset.node){const n=visibleGraph().nodes.find(n=>n.id===target.dataset.node);if(n)gesture.item={id:n.id,x:n.x,y:n.y};}
+ if(pointers.size===1&&e.button===0&&!spacePan){if(arrowTool)gesture.freeArrow={x:Math.max(0,Math.min(10000,camera.x+p.x/zoom)),y:Math.max(0,Math.min(10000,camera.y+p.y/zoom))};else if(!handTool&&!linkMode&&target?.dataset.arrow)gesture.freeMove={...graph.arrows.find(a=>a.id===target.dataset.arrow)};}
  $('canvas').setPointerCapture(e.pointerId);
 });
 $('canvas').addEventListener('pointermove',e=>{
@@ -128,7 +131,10 @@ $('canvas').addEventListener('pointermove',e=>{
  }else{
  if(!gesture.moved&&Math.hypot(p.x-gesture.start.x,p.y-gesture.start.y)<4)return;
  gesture.moved=true;
- if(gesture.connector){
+ if(gesture.freeArrow){
+ let preview=$('connector-preview');if(!preview){preview=document.createElementNS('http://www.w3.org/2000/svg','path');preview.id='connector-preview';preview.setAttribute('stroke','#80e9ef');preview.setAttribute('stroke-width','3');preview.setAttribute('marker-end','url(#arrow)');preview.setAttribute('pointer-events','none');$('canvas').append(preview);}preview.setAttribute('d',`M${gesture.freeArrow.x} ${gesture.freeArrow.y} L${Math.max(0,Math.min(10000,camera.x+p.x/zoom))} ${Math.max(0,Math.min(10000,camera.y+p.y/zoom))}`);
+ }else if(gesture.freeMove){const a=gesture.freeMove,dx=Math.max(-Math.min(a.x1,a.x2),Math.min(10000-Math.max(a.x1,a.x2),(p.x-gesture.start.x)/zoom)),dy=Math.max(-Math.min(a.y1,a.y2),Math.min(10000-Math.max(a.y1,a.y2),(p.y-gesture.start.y)/zoom));Object.assign(graph.arrows.find(n=>n.id===a.id),{x1:a.x1+dx,x2:a.x2+dx,y1:a.y1+dy,y2:a.y2+dy});gesture.itemMoved=true;selected={kind:'arrow',id:a.id};scheduleItemDraw();
+ }else if(gesture.connector){
  const n=visibleGraph().nodes.find(n=>n.id===gesture.connector);if(n){let preview=$('connector-preview');if(!preview){preview=document.createElementNS('http://www.w3.org/2000/svg','path');preview.id='connector-preview';preview.setAttribute('fill','none');preview.setAttribute('stroke','#86ccff');preview.setAttribute('stroke-width','3');preview.setAttribute('stroke-dasharray','7 5');preview.setAttribute('pointer-events','none');$('canvas').append(preview);}preview.setAttribute('d',`M${n.x+(n.width||224)/2} ${n.y+(n.height||116)/2} L${camera.x+p.x/zoom} ${camera.y+p.y/zoom}`);}
  }else if(gesture.item){
  const n=gesture.item;moveDiagramItem(graph,visibleGraph(),n.id,n.x+(p.x-gesture.start.x)/zoom,n.y+(p.y-gesture.start.y)/zoom);
@@ -143,11 +149,13 @@ function endPointer(e){
  if(pointers.size){gesture.last=[...pointers.values()][0];gesture.pinch=null;gesture.moved=true;return;}
  const done=gesture;gesture=null;$('viewport').classList.remove('is-panning');
  $('connector-preview')?.remove();
+ if(done?.freeArrow){if(e.type==='pointerup'&&done.moved){const p=localPoint(e),id=crypto.randomUUID();graph.arrows=[...(graph.arrows||[]),{id,x1:done.freeArrow.x,y1:done.freeArrow.y,x2:Math.max(0,Math.min(10000,camera.x+p.x/zoom)),y2:Math.max(0,Math.min(10000,camera.y+p.y/zoom))}];selected={kind:'arrow',id};changed();setTool(false);draw();inspector();}return;}
  if(done?.connector){if(e.type==='pointerup'){const target=dropNodeAt(e,done.connector);if(target)connectDroppedItems(done.connector,target);else beginHandleConnection(done.connector,null);}return;}
  if(done?.itemMoved){changed();draw();inspector();}
  if(e.type!=='pointerup'||done?.moved||done?.button!==0||handTool||spacePan)return;
  if(done.target?.dataset.node)choose('node',done.target.dataset.node);
  else if(done.target?.dataset.edge)choose('edge',done.target.dataset.edge);
+ else if(done.target?.dataset.arrow)choose('arrow',done.target.dataset.arrow);
  else{selected=null;draw();inspector();}
 }
 for(const event of ['pointerup','pointercancel','lostpointercapture'])$('canvas').addEventListener(event,endPointer);
@@ -197,11 +205,11 @@ function pickEndpoint(id){
  const render=()=>{const q=$('endpoint-filter').value.toLowerCase();$('endpoint-members').innerHTML=group.members.filter(n=>n.id!==linkSource&&[n.label,n.ip].join(' ').toLowerCase().includes(q)).map(n=>`<button class="group-member" data-endpoint="${esc(n.id)}"><strong>${esc(n.label)}</strong><span>${esc(n.ip||'No IP recorded')}</span></button>`).join('')||'<p>No matching components.</p>';$('endpoint-members').querySelectorAll('[data-endpoint]').forEach(b=>b.onclick=()=>acceptEndpoint(b.dataset.endpoint));};
  $('endpoint-filter').oninput=render;render();
 }
-$('connect').onclick=()=>{if(!ready)return;if(linkMode){stopConnecting();return;}handTool=false;spacePan=false;$('viewport').classList.remove('hand-tool');$('tool-pan').classList.remove('selected');$('tool-pan').setAttribute('aria-pressed','false');$('tool-select').classList.add('selected');$('tool-select').setAttribute('aria-pressed','true');linkMode=true;linkSource=null;pendingTarget=null;selected=null;draw();$('inspector').innerHTML='<h2>Choose source</h2><p>Click the item where traffic starts, then click its destination. You can still drag and zoom.</p>';};
-window.addEventListener('keydown',e=>{if(e.key==='Escape'&&linkMode)stopConnecting();});
+$('connect').onclick=()=>{if(!ready)return;if(linkMode){stopConnecting();return;}arrowTool=false;$('draw-arrow').classList.remove('selected');$('draw-arrow').setAttribute('aria-pressed','false');handTool=false;spacePan=false;$('viewport').classList.remove('hand-tool');$('tool-pan').classList.remove('selected');$('tool-pan').setAttribute('aria-pressed','false');$('tool-select').classList.add('selected');$('tool-select').setAttribute('aria-pressed','true');linkMode=true;linkSource=null;pendingTarget=null;selected=null;draw();$('inspector').innerHTML='<h2>Choose source</h2><p>Click the item where traffic starts, then click its destination. You can still drag and zoom.</p>';};
+window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(arrowTool)setTool(false);if(linkMode)stopConnecting();}});
 
 $('zoom-in').onclick=()=>zoomAt(zoom*1.2);$('zoom-out').onclick=()=>zoomAt(zoom/1.2);
-$('generate').onclick=async()=>{if(!ready||!confirm('Replace the current diagram with one generated from service records?'))return;Object.assign(graph,generateArchitecture(record),{positions:[]});expanded.clear();selected=null;changed();draw();fit();inspector();};
+$('generate').onclick=async()=>{if(!ready||!confirm('Replace the current diagram with one generated from service records?'))return;Object.assign(graph,generateArchitecture(record),{positions:[],arrows:[]});expanded.clear();selected=null;changed();draw();fit();inspector();};
 $('save').onclick=async()=>{if(!ready)return;const version=epoch;$('save').disabled=true;try{const saved=await request(`/api/services/${encodeURIComponent(serviceId)}/architecture`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(graph)});graph.revision=saved.revision;if(epoch===version){dirty=false;status('Diagram saved');}else status('Previous version saved; newer changes remain unsaved');}catch(e){status(e.message);}finally{$('save').disabled=false;}};
 $('export').onclick=()=>{if(!ready)return;const svg=$('canvas').cloneNode(true);const {w,h}=dimensions();svg.setAttribute('viewBox',`0 0 ${w} ${h}`);svg.setAttribute('width',w);svg.setAttribute('height',h);const blob=new Blob([new XMLSerializer().serializeToString(svg)],{type:'image/svg+xml;charset=utf-8'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='service-architecture.svg';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
