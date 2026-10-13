@@ -8,6 +8,8 @@ import {generateArchitecture,environments} from './architecture-model.js';
 const $=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 $('type').innerHTML=types.map(t=>`<option>${esc(t)}</option>`).join('');
 const serviceId=new URLSearchParams(location.search).get('service');
+// Keep navigation available even if loading the records fails.
+$('back').href=serviceId?'/#/service/'+encodeURIComponent(serviceId):'/';
 let record,graph={revision:0,nodes:[],edges:[]},selected=null,linkMode=false,linkSource=null,zoom=1,dirty=false,epoch=0,drag=null,ready=false;
 const grouped=true;
 let impactTarget=null;
