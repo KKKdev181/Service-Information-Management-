@@ -17,9 +17,10 @@ export function roleFor(n){
 const icons={'Applications':'VM','Databases':'Database','Load Balancers':'Load Balancer','Security':'Firewall','Integrations':'API','Storage':'Storage','Operations':'Monitoring','Unassigned':'Server'};
 export function groupArchitecture(graph,expanded=new Set()){
  const groups=new Map(),membership=new Map(),nodes=[],edges=[],pairs=new Map();
- for(const n of graph.nodes){const environment=!n.environment||n.environment==='\u063a\u064a\u0631 \u0645\u062d\u062f\u062f'?'Not specified':n.environment;const role=roleFor(n),key=JSON.stringify([environment,role]);let g=groups.get(key);if(!g){g={id:'group:'+key,role,environment,members:[],internal:[]};groups.set(key,g);}g.members.push(n);membership.set(n.id,g);}
+ for(const n of graph.nodes){const environment=!n.environment||n.environment==='\u063a\u064a\u0631 \u0645\u062d\u062f\u062f'?'Not specified':n.environment;const role=roleFor(n),key=n.displayMode==='separate'?n.id:JSON.stringify([environment,role]);let g=groups.get(key);if(!g){g={id:n.displayMode==='separate'?n.id:'group:'+key,separate:n.displayMode==='separate',role,environment,members:[],internal:[]};groups.set(key,g);}g.members.push(n);membership.set(n.id,g);}
  for(const g of groups.values()){
- if(expanded.has(g.id))nodes.push(...g.members.map(n=>({...n,environment:g.environment,groupId:g.id})));
+ if(g.separate)nodes.push({...g.members[0],environment:g.environment});
+ else if(expanded.has(g.id))nodes.push(...g.members.map(n=>({...n,environment:g.environment,groupId:g.id})));
  else nodes.push({id:g.id,label:g.role+' · '+g.members.length,type:icons[g.role],environment:g.environment,ip:g.members.length+' components',width:280,height:116,x:0,y:0,isGroup:true,groupId:g.id});
  }
  for(const e of graph.edges){const a=membership.get(e.source)||[...groups.values()].find(g=>g.id===e.source),b=membership.get(e.target)||[...groups.values()].find(g=>g.id===e.target);if(!a||!b)continue;
@@ -32,7 +33,7 @@ export function groupArchitecture(graph,expanded=new Set()){
  const projected=arrangeArchitecture({nodes,edges});
  const positions=new Map((graph.positions||[]).map(p=>[p.id,p]));
  for(const node of projected.nodes){const p=positions.get(node.id);if(p&&Number.isFinite(p.x)&&Number.isFinite(p.y)){node.x=p.x;node.y=p.y;}}
- return {...projected,groups:[...groups.values()],membership};
+ return {...projected,groups:[...groups.values()].filter(g=>!g.separate),membership};
 }
 
 // Store overview and expanded-component positions separately from grouping logic.
