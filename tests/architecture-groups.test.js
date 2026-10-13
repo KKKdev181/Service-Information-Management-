@@ -46,3 +46,19 @@ test('group links preserve scope and direction without inventing server pairs or
  assert.equal(projected.edges[0].target,to);
  assert.throws(()=>validateGraph({...graph,edges:[{id:'invalid',source:from,target:'group:missing'}]}));
 });
+
+test('separate components remain independent beside groups and retain exact connections',()=>{
+ const graph=sample();graph.nodes.find(n=>n.id==='a').displayMode='separate';
+ graph.edges=[{id:'ab',source:'a',target:'b'},{id:'ac',source:'a',target:'c'}];
+ const saved=validateGraph(graph),view=groupArchitecture(saved);
+ assert.equal(saved.nodes.find(n=>n.id==='a').displayMode,'separate');
+ assert.ok(view.nodes.some(n=>n.id==='a'&&!n.isGroup));
+ assert.ok(view.groups.every(g=>!g.members.some(n=>n.id==='a')));
+ assert.equal(view.membership.get('b').members.length,1);
+ assert.equal(view.edges.filter(e=>e.source==='a').length,2);
+ saved.nodes.find(n=>n.id==='a').displayMode='grouped';
+ const grouped=groupArchitecture(saved);
+ assert.equal(grouped.nodes.some(n=>n.id==='a'),false);
+ assert.equal(grouped.membership.get('a').id,grouped.membership.get('b').id);
+ assert.equal(saved.edges.length,2);
+});
