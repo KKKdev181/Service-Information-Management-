@@ -4,13 +4,18 @@ import { Readable } from 'node:stream';
 export async function readLegacyBuffer(buffer, filename) {
   const wanted=new Set(['Summary','Server Details','APP Comm Matrix','Standard Comm Matrix','NATTING']);
   const sheets=new Map();
+  const rowLimits = {'Summary': 20, 'Server Details': 400, 'APP Comm Matrix': 1000, 'Standard Comm Matrix': 1000, 'NATTING': 20};
+  const maxCells = 65;
   const reader=new ExcelJS.stream.xlsx.WorkbookReader(Readable.from([buffer]),{sharedStrings:'cache',styles:'ignore',worksheets:'emit',hyperlinks:'ignore'});
   for await (const sheet of reader) {
     if(!wanted.has(sheet.name)) { for await (const ignored of sheet) {} continue; }
     const rows=new Map();
     for await(const row of sheet){
       const cells=new Map();
-      row.eachCell({includeEmpty:false},(cell,col)=>cells.set(col,String(cell.text ?? '')));
+      if (row.number > rowLimits[sheet.name]) continue;
+      row.eachCell({includeEmpty:false}, (cell,col) => {
+        if (col <= maxCells) cells.set(col, String(cell.text ?? '').slice(0, 2000));
+      });
       rows.set(row.number,cells);
     }
     sheets.set(sheet.name,{rowCount:Math.max(0,...rows.keys()),getRow:r=>({getCell:c=>({text:rows.get(r)?.get(c)||''})})});
