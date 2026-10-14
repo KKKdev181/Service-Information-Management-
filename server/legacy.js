@@ -21,7 +21,7 @@ const addUnique = (arr, item, key) => { if (!arr.some(a=>key(a)===key(item))) ar
 
 export async function parseImplementationSheet(book, filename='') {
   const detail=book.getWorksheet('Server Details');
-  if(!detail || !book.getWorksheet('Summary') || !rowWith(detail,'Host Name',3)) return null;
+  if(!detail || !book.getWorksheet('Summary') || !rowWith(detail,'Host Name',5) && !rowWith(detail,'Host Name',3)) return null;
   const projectRow=rowWith(detail,'Project Name',4);
   const name=val(detail,projectRow,5) || val(book.getWorksheet('Summary'),1,3);
   if(!name) throw Object.assign(new Error('Could not identify the service name in this template. Enter it in the Project Name.'),{status:400});
@@ -37,7 +37,7 @@ export async function parseImplementationSheet(book, filename='') {
       else record.Networks.push({name:network,ipam:val(detail,r,6),range:val(detail,r,7),vlan:val(detail,r,8),subnet:val(detail,r,9),gateway:val(detail,r,10),context:'',notes:''});
     }
   }
-  const header=rowWith(detail,'Host Name',3);
+  const header=rowWith(detail,'Host Name',3) || rowWith(detail,'Host Name',5);
   for(let r=header+1;r<=Math.min(detail.rowCount,header+300);r++){
     const host=val(detail,r,3);
     if(!host || /^Host Name$/i.test(host)) continue;
