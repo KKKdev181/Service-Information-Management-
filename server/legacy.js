@@ -1,20 +1,8 @@
-import ExcelJS from 'exceljs';
+import { readLegacyWorkbook } from './legacy-zip.js';
 
 export async function readLegacyBuffer(buffer, filename) {
-  // These implementation workbooks are small but may include many
-  // drawings, styles and optional Excel structures. Skip these objects.
-  // The previous streaming reader could exhaust the worker heap on
-  // otherwise small, heavily formatted templates.
-  const book = new ExcelJS.Workbook();
-  await book.xlsx.load(buffer, {
-    ignoreNodes: [
-      'drawing', 'legacyDrawing', 'picture', 'extLst',
-      'conditionalFormatting', 'dataValidations',
-      'sheetProtection', 'pageSetup', 'printOptions',
-      'headerFooter', 'rowBreaks', 'colBreaks', 'hyperlinks'
-    ]
-  });
-  return parseImplementationSheet(book, filename);
+  const workbook = readLegacyWorkbook(buffer);
+  return workbook ? parseImplementationSheet(workbook, filename) : null;
 }
 
 const text = (sheet, row, col) => {
