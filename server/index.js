@@ -4,7 +4,7 @@ import { Worker } from 'node:worker_threads';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { list, upsert, remove, workbookPath, previewWorkbook, importRecords } from './store.js';
+import { list, upsert, remove, workbookPath, importRecords } from './store.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -26,7 +26,12 @@ const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 app.get('/vendor/elk.bundled.js', (req,res)=>res.sendFile(createRequire(import.meta.url).resolve('elkjs/lib/elk.bundled.js')));
 app.use(express.static(publicDir));
 app.get('/{*path}', (req, res) => res.sendFile(path.join(publicDir, 'index.html')));
-app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: err.status ? err.message : 'An error occurred while processing the request' }); });
+app.use((err, req, res, next) => {
+  const status = Number.isInteger(err.status) && err.status >= 400 && err.status < 500 ? err.status : 500;
+  if (status >= 500) console.error('Request failed:', err);
+  if (res.headersSent) return next(err);
+  res.status(status).json({ error: status < 500 ? err.message : 'An error occurred while processing the request' });
+});
 function asyncRoute(fn) { return (req, res, next) => Promise.resolve(fn(req, res)).catch(next); }
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || '127.0.0.1';
