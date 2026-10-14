@@ -1,5 +1,6 @@
 import { readArchitecture, saveArchitecture } from './architecture.js';
 import express from 'express';
+import { listReferences, saveReference, deleteReference } from './references.js';
 import { Worker } from 'node:worker_threads';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -10,6 +11,10 @@ const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '10mb' }));
 app.use((req, res, next) => { res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Referrer-Policy', 'no-referrer'); next(); });
+app.get('/api/references', asyncRoute(async(req,res)=>res.json(await listReferences())));
+app.post('/api/references', asyncRoute(async(req,res)=>res.status(201).json(await saveReference(null,req.body))));
+app.put('/api/references/:id', asyncRoute(async(req,res)=>res.json(await saveReference(req.params.id,req.body))));
+app.delete('/api/references/:id', asyncRoute(async(req,res)=>{await deleteReference(req.params.id);res.status(204).end();}));
 app.get('/api/services', asyncRoute(async (req, res) => res.json(await list())));
 app.post('/api/services', asyncRoute(async (req, res) => res.status(201).json(await upsert(null, req.body))));
 app.put('/api/services/:id', asyncRoute(async (req, res) => res.json(await upsert(req.params.id, req.body))));
