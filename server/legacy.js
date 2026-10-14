@@ -1,26 +1,20 @@
 import ExcelJS from 'exceljs';
-import { Readable } from 'node:stream';
 
 export async function readLegacyBuffer(buffer, filename) {
-  const wanted=new Set(['Summary','Server Details','APP Comm Matrix','Standard Comm Matrix','NATTING']);
-  const sheets=new Map();
-  const rowLimits = {'Summary': 20, 'Server Details': 400, 'APP Comm Matrix': 1000, 'Standard Comm Matrix': 1000, 'NATTING': 20};
-  const maxCells = 65;
-  const reader=new ExcelJS.stream.xlsx.WorkbookReader(Readable.from([buffer]),{sharedStrings:'cache',styles:'ignore',worksheets:'emit',hyperlinks:'ignore'});
-  for await (const sheet of reader) {
-    if(!wanted.has(sheet.name)) { for await (const ignored of sheet) {} continue; }
-    const rows=new Map();
-    for await(const row of sheet){
-      const cells=new Map();
-      if (row.number > rowLimits[sheet.name]) continue;
-      row.eachCell({includeEmpty:false}, (cell,col) => {
-        if (col <= maxCells) cells.set(col, String(cell.text ?? '').slice(0, 2000));
-      });
-      rows.set(row.number,cells);
-    }
-    sheets.set(sheet.name,{rowCount:Math.max(0,...rows.keys()),getRow:r=>({getCell:c=>({text:rows.get(r)?.get(c)||''})})});
-  }
-  return parseImplementationSheet({getWorksheet:name=>sheets.get(name)},filename);
+  // These implementation workbooks are small but may include many
+  // drawings, styles and optional Excel structures. Skip these objects.
+  // The previous streaming reader could exhaust the worker heap on
+  // otherwise small, heavily formatted templates.
+  const book = new ExcelJS.Workbook();
+  await book.xlsx.load(buffer, {
+    ignoreNodes: [
+      'drawing', 'legacyDrawing', 'picture', 'extLst',
+      'conditionalFormatting', 'dataValidations',
+      'sheetProtection', 'pageSetup', 'printOptions',
+      'headerFooter', 'rowBreaks', 'colBreaks', 'hyperlinks'
+    ]
+  });
+  return parseImplementationSheet(book, filename);
 }
 
 const text = (sheet, row, col) => {
