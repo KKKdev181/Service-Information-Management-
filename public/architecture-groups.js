@@ -1,4 +1,17 @@
 import {arrangeArchitecture} from './architecture-view.js';
+export const isContainer=n=>['Database Cluster','Application Group'].includes(n?.type);
+export function attachToContainer(graph,view,item,container){
+ if(!item||isContainer(item)||!isContainer(container))return false;
+ const shown=view.nodes.find(n=>n.id===container.id)||container;
+ const members=graph.nodes.filter(n=>n.parentId===container.id&&n.id!==item.id);
+ const nextY=Math.max(shown.y+100,...members.map(n=>{const p=view.nodes.find(v=>v.id===n.id)||n;return p.y+(p.height||116)+24;}));
+ Object.assign(item,{parentId:container.id,displayMode:'separate',width:Math.max(item.width||224,Math.min(700,(container.width||520)-48))});
+ if(!view.nodes.some(n=>n.id===item.id))view.nodes.push({...item});
+ moveDiagramItem(graph,view,item.id,shown.x+24,nextY);
+ container.width=Math.max(container.width||520,(item.width||224)+48);
+ container.height=Math.max(container.height||300,nextY-shown.y+(item.height||116)+24);
+ return true;
+}
 export const roles=['Applications','Databases','Load Balancers','Security','Integrations','Storage','Operations','Unassigned'];
 export function roleFor(n){
  if(roles.includes(n.architectureRole))return n.architectureRole;
@@ -17,7 +30,7 @@ export function roleFor(n){
 const icons={'Applications':'VM','Databases':'Database','Load Balancers':'Load Balancer','Security':'Firewall','Integrations':'API','Storage':'Storage','Operations':'Monitoring','Unassigned':'Server'};
 export function groupArchitecture(graph,expanded=new Set()){
  const groups=new Map(),membership=new Map(),nodes=[],edges=[],pairs=new Map();
- for(const n of graph.nodes){const environment=!n.environment||n.environment==='\u063a\u064a\u0631 \u0645\u062d\u062f\u062f'?'Not specified':n.environment;const role=roleFor(n),key=n.displayMode==='separate'?n.id:JSON.stringify(n.hostingLocation?[environment,role,n.hostingLocation]:[environment,role]);let g=groups.get(key);if(!g){g={id:n.displayMode==='separate'?n.id:'group:'+key,separate:n.displayMode==='separate',role,environment,hostingLocation:n.hostingLocation||'',members:[],internal:[]};groups.set(key,g);}g.members.push(n);membership.set(n.id,g);}
+ for(const n of graph.nodes){const environment=!n.environment||n.environment==='\u063a\u064a\u0631 \u0645\u062d\u062f\u062f'?'Not specified':n.environment;const role=roleFor(n),key=(n.displayMode==='separate'||isContainer(n)||n.parentId)?n.id:JSON.stringify(n.hostingLocation?[environment,role,n.hostingLocation]:[environment,role]);let g=groups.get(key);if(!g){g={id:(n.displayMode==='separate'||isContainer(n)||n.parentId)?n.id:'group:'+key,separate:(n.displayMode==='separate'||isContainer(n)||n.parentId),role,environment,hostingLocation:n.hostingLocation||'',members:[],internal:[]};groups.set(key,g);}g.members.push(n);membership.set(n.id,g);}
  for(const g of groups.values()){
  if(g.separate)nodes.push({...g.members[0],environment:g.environment});
  else if(expanded.has(g.id))nodes.push(...g.members.map(n=>({...n,environment:g.environment,groupId:g.id})));
@@ -32,7 +45,7 @@ export function groupArchitecture(graph,expanded=new Set()){
  for(const e of edges)e.type=e.members.length+' recorded connection'+(e.members.length===1?'':'s');
  const projected=arrangeArchitecture({nodes,edges});
  const positions=new Map((graph.positions||[]).map(p=>[p.id,p]));
- for(const node of projected.nodes){const p=positions.get(node.id);if(p&&Number.isFinite(p.x)&&Number.isFinite(p.y)){node.x=p.x;node.y=p.y;}}
+ for(const node of projected.nodes){const p=positions.get(node.id)||((isContainer(node)||node.parentId)?graph.nodes.find(n=>n.id===node.id):null);if(p&&Number.isFinite(p.x)&&Number.isFinite(p.y)){node.x=p.x;node.y=p.y;}}
  return {...projected,groups:[...groups.values()].filter(g=>!g.separate),membership};
 }
 
@@ -41,6 +54,11 @@ export function moveDiagramItem(graph,view,id,x,y){
  const node=view.nodes.find(n=>n.id===id);if(!node)return false;
  const position={id,x:Math.max(0,Math.min(10000,x)),y:Math.max(0,Math.min(10000,y))};
  graph.positions=[...(graph.positions||[]).filter(p=>p.id!==id),position];
+ const dx=position.x-node.x,dy=position.y-node.y;
+ if(isContainer(node))for(const child of graph.nodes.filter(n=>n.parentId===id)){
+ const shown=view.nodes.find(n=>n.id===child.id)||child;
+ moveDiagramItem(graph,view,child.id,shown.x+dx,shown.y+dy);
+ }
  node.x=position.x;node.y=position.y;
  const original=graph.nodes.find(n=>n.id===id);if(original){original.x=position.x;original.y=position.y;}
  return true;
@@ -48,3 +66,4 @@ export function moveDiagramItem(graph,view,id,x,y){
 
 // Groups are valid architecture endpoints, distinct from individual server links.
 export function connectionNodes(graph){return [...graph.nodes,...groupArchitecture({nodes:graph.nodes,edges:[]}).groups.map(g=>({id:g.id,label:g.role+' · '+g.environment+(g.hostingLocation?' · '+g.hostingLocation:''),type:'Group',environment:g.environment,hostingLocation:g.hostingLocation,ip:''}))];}
+
