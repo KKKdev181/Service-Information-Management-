@@ -3,7 +3,7 @@ export {icon} from './architecture-icons.js';
 import {routeSignature} from './architecture-layout.js';
 export const W=224,H=116;
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export const types=['User','Internet','External System','External','URL','Firewall','WAF','Load Balancer','Switch','VPN','MPLS','GSN','NAT','DNS','Proxy','Physical Server','VM','Server','Windows Server','Linux Server','OpenShift','Docker','Cloud','Database','Oracle','SQL Server','PostgreSQL','Redis','Storage','S3 / MinIO','API','API Gateway','DataPower','3scale','Apigee','Kafka','Message Queue','Monitoring','Backup','DR Site'];
+export const types=['Database Cluster','Application Group','User','Internet','External System','External','URL','Firewall','WAF','Load Balancer','Switch','VPN','MPLS','GSN','NAT','DNS','Proxy','Physical Server','VM','Server','Windows Server','Linux Server','OpenShift','Docker','Cloud','Database','Oracle','SQL Server','PostgreSQL','Redis','Storage','S3 / MinIO','API','API Gateway','DataPower','3scale','Apigee','Kafka','Message Queue','Monitoring','Backup','DR Site'];
 export const zones=['EXTERNAL','NETWORK / SECURITY','APPLICATION','DATA','INTEGRATION','OPERATIONS'];
 export function zoneFor(n){if(n.zone)return n.zone;if(['User','Internet','External System','External','URL','Cloud'].includes(n.type))return zones[0];if(['Firewall','WAF','Load Balancer','Switch','VPN','MPLS','GSN','NAT','DNS','Proxy'].includes(n.type))return zones[1];if(['Database','Oracle','SQL Server','PostgreSQL','Redis','Storage','S3 / MinIO'].includes(n.type))return zones[3];if(['API','API Gateway','DataPower','3scale','Apigee','Kafka','Message Queue'].includes(n.type))return zones[4];if(['Monitoring','Backup','DR Site'].includes(n.type))return zones[5];return zones[2];}
 export function arrangeArchitecture(graph){
@@ -40,13 +40,14 @@ export function componentBoundary(node,width,height,theme='dark',active=false){
  return `<g data-boundary="${family}" pointer-events="none">${shape}</g>`;
 }
 export function renderArchitecture(graph,selected,linkSource,theme='dark'){
+ const isContainer=n=>['Database Cluster','Application Group'].includes(n.type);
  const equipment=[];const art=markup=>{equipment.push(markup);return `__EQUIPMENT_${equipment.length-1}__`;};
  const labelBoxes=[],labelMarkup=[];let routeRight=0;
  const overlaps=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
  function placeLabel(text,x,y){
  const lines=text.match(/.{1,28}(?:\s|$)|.{1,28}/g)||[text];
  const width=Math.max(100,Math.max(...lines.map(l=>l.length))*9+24),height=lines.length*21+14;
- const obstacles=graph.nodes.map(n=>({x:n.x-20,y:n.y-40,w:(n.width||W)+40,h:(n.height||H)+62}));
+ const obstacles=graph.nodes.filter(n=>!isContainer(n)).map(n=>({x:n.x-20,y:n.y-40,w:(n.width||W)+40,h:(n.height||H)+62}));
  let box;outer:for(let radius=0;radius<100;radius++){for(const dy of radius?[radius*30,-radius*30]:[0])for(const dx of [0,-width/2,width/2,-width,width]){
  const candidate={x:Math.max(8,x-width/2+dx),y:Math.max(8,y-height/2+dy),w:width,h:height};
  if(![...obstacles,...labelBoxes].some(b=>overlaps(candidate,b))){box=candidate;break outer;}}}
@@ -56,15 +57,19 @@ export function renderArchitecture(graph,selected,linkSource,theme='dark'){
  const lookup=new Map(graph.nodes.map(n=>[n.id,n]));const linked=new Set(selected?.kind==='node'?graph.edges.filter(e=>e.source===selected.id||e.target===selected.id).flatMap(e=>[e.source,e.target]):[]);
  const w=Math.max(360,...graph.nodes.map(n=>n.x+(n.width||W)+65)),h=Math.max(650,...graph.nodes.map(n=>n.y+(n.height||H)+90));
  let svg='<defs><marker id="arrow" viewBox="0 0 12 12" markerWidth="7" markerHeight="7" refX="11" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M1 1 L11 6 L1 11 L3 6Z" fill="#80e9ef"/></marker></defs><rect width="100%" height="100%" fill="#101217" opacity="0"/>';
- const groups=new Map();for(const n of graph.nodes){const key=(n.environment||'Not specified')+' · '+zoneFor(n);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(n);}
+ const groups=new Map();for(const n of graph.nodes.filter(n=>!isContainer(n)&&!n.parentId)){const key=(n.environment||'Not specified')+' · '+zoneFor(n);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(n);}
  // Separate contiguous regions so a zone never encloses unrelated intervening nodes.
  for(const [key,group] of groups){const columns=new Map();for(const n of group){if(!columns.has(n.x))columns.set(n.x,[]);columns.get(n.x).push(n);}for(const col of columns.values()){col.sort((a,b)=>a.y-b.y);let runs=[];for(const n of col){const run=runs.at(-1);if(run&&n.y-(run.at(-1).y+(run.at(-1).height||H))<100)run.push(n);else runs.push([n]);}for(const run of runs){const x=run[0].x-18,y=run[0].y-38,bottom=Math.max(...run.map(n=>n.y+(n.height||H))),width=Math.max(...run.map(n=>n.width||W))+36;svg+=`<rect x="${x}" y="${y}" width="${width}" height="${bottom-y+18}" rx="12" fill="${run.length>1?'#161a21':'none'}" stroke="${run.length>1?'#363e4b':'none'}" stroke-dasharray="3 5"/><text x="${x+9}" y="${y+20}" font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="12" fill="#c8d8e8">${esc(key)}</text>`;}}}
+ svg+=graph.nodes.filter(isContainer).map(n=>{
+ const active=selected?.id===n.id,color=n.type==='Database Cluster'?'#89dcca':'#b8a5f0',count=graph.nodes.filter(c=>c.parentId===n.id).length;
+ return `<g class="arch-node cluster-frame ${active?'is-selected':''}" data-node="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(n.label)} group" transform="translate(${n.x},${n.y})"><rect width="${n.width||520}" height="${n.height||300}" rx="18" fill="${theme==='light'?'#f0f4f9':'#182332'}" stroke="${active?'#d4b9ff':color}" stroke-width="${active?3:1.5}"/><path d="M0 84H${n.width||520}" stroke="${color}" opacity=".35"/><g transform="translate(16,13) scale(.85)">${art(icon(n.type))}</g><text x="82" y="32" font-family="Segoe UI,Arial" font-size="18" font-weight="600" fill="#f1f5f9">${esc(n.label.slice(0,45))}</text><text x="82" y="57" font-family="Segoe UI,Arial" font-size="13" fill="#c8d5e6">Listener IP: ${esc(n.listenerIp||'Not set')}</text><text x="${(n.width||520)-20}" y="74" text-anchor="end" font-family="Segoe UI,Arial" font-size="11" fill="${color}">${count} ${count===1?'member':'members'}</text>${count?'':`<text x="${(n.width||520)/2}" y="165" text-anchor="middle" font-family="Segoe UI,Arial" font-size="14" fill="#bac7d9">Drop components here</text>`}<title>${esc(n.type+' · '+n.label+' · Listener IP: '+(n.listenerIp||'Not set'))}</title></g>`;
+ }).join('');
  svg+=graph.edges.map((e,i)=>{const a=lookup.get(e.source),b=lookup.get(e.target);if(!a||!b)return '';const down=b.y>=a.y;const ax=a.x+(a.width||W)/2,bx=b.x+(b.width||W)/2,ay=a.y+(down?(a.height||H):0),by=b.y+(down?0:(b.height||H));const mid=a.y===b.y?a.y+Math.max(a.height||H,b.height||H)+50+(i%3)*18:(ay+by)/2;let d=a.y===b.y?`M${ax} ${a.y+(a.height||H)} V${mid} H${bx} V${b.y+(b.height||H)}`:`M${ax} ${ay} V${mid} H${bx} V${by}`;const route=e.route?.signature===routeSignature(graph,e)?e.route.points:null;if(route?.length)d=route.map((p,j)=>`${j?'L':'M'}${p.x} ${p.y}`).join(' ');let anchor=route?.[Math.floor(route.length/2)];
  // A long vertical connection must not run through unrelated equipment.
  if(!route?.length){
  const startY=a.y===b.y?a.y+(a.height||H):ay,endY=a.y===b.y?b.y+(b.height||H):by;
  const points=[{x:ax,y:startY},{x:ax,y:mid},{x:bx,y:mid},{x:bx,y:endY}];
- const blocked=graph.nodes.filter(n=>n.id!==a.id&&n.id!==b.id).some(n=>points.slice(1).some((p,j)=>{
+ const blocked=graph.nodes.filter(n=>!isContainer(n)&&n.id!==a.id&&n.id!==b.id).some(n=>points.slice(1).some((p,j)=>{
  const q=points[j],left=n.x-16,right=n.x+(n.width||W)+16,top=n.y-40,bottom=n.y+(n.height||H)+16;
  return p.x===q.x?p.x>left&&p.x<right&&Math.max(p.y,q.y)>top&&Math.min(p.y,q.y)<bottom:p.y>top&&p.y<bottom&&Math.max(p.x,q.x)>left&&Math.min(p.x,q.x)<right;
  }));
@@ -79,7 +84,7 @@ export function renderArchitecture(graph,selected,linkSource,theme='dark'){
  if(label){const box=placeLabel(label,labelX,labelY-12);const lines=label.match(/.{1,28}(?:\s|$)|.{1,28}/g)||[label];labelMarkup.push(`<g data-edge="${esc(e.id)}" class="arch-edge"><path d="M${labelX} ${labelY} L${box.x+box.w/2} ${box.y+box.h/2}" stroke="#778394" stroke-dasharray="3 3" fill="none"/><rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" rx="7" fill="#1d222b" stroke="#4d5665"/><text font-family="Segoe UI, Tahoma, Arial, sans-serif" font-size="15" fill="#ffffff" text-anchor="middle">${lines.map((line,j)=>`<tspan x="${box.x+box.w/2}" y="${box.y+23+j*21}">${esc(line.trim())}</tspan>`).join('')}</text></g>`);}
  return `<g class="arch-edge" data-edge="${esc(e.id)}" opacity="1"><path d="${d}" fill="none" stroke="transparent" stroke-width="18"/><path d="${d}" fill="none" stroke="${active?'#d5bcff':'#80e9ef'}" stroke-width="${active?3.5:2.8}" stroke-linejoin="round" marker-end="url(#arrow)"/><title>${esc(a.label+' → '+b.label+' · '+label)}</title></g>`;}).join('');
  svg+=(graph.arrows||[]).map(a=>`<g class="arch-edge" data-arrow="${esc(a.id)}" tabindex="0" role="button" aria-label="Free arrow"><path d="M${a.x1} ${a.y1} L${a.x2} ${a.y2}" fill="none" stroke="transparent" stroke-width="20"/><path d="M${a.x1} ${a.y1} L${a.x2} ${a.y2}" fill="none" stroke="${selected?.kind==='arrow'&&selected.id===a.id?'#d5bcff':'#80e9ef'}" stroke-width="3" marker-end="url(#arrow)"/><title>Free arrow — no linked items</title></g>`).join('');
- svg+=graph.nodes.map(n=>{
+ svg+=graph.nodes.filter(n=>!isContainer(n)).map(n=>{
  const nw=n.width||W,nh=n.height||H,type=componentType(n),color=componentColor(type);
  const active=selected?.id===n.id||linkSource===n.id;
  const boundaryRole=graph.groups?.find(g=>g.id===n.id)?.role||n.architectureRole;
@@ -108,3 +113,4 @@ export function renderArchitecture(graph,selected,linkSource,theme='dark'){
  svg=svg.replace(/__EQUIPMENT_(\d+)__/g,(_,i)=>equipment[Number(i)]);
  return {svg,w:Math.max(w,routeRight,...(graph.arrows||[]).flatMap(a=>[a.x1+30,a.x2+30]),...labelBoxes.map(b=>b.x+b.w+20)),h:Math.max(h,...(graph.arrows||[]).flatMap(a=>[a.y1+30,a.y2+30]),...labelBoxes.map(b=>b.y+b.h+20))};
 }
+
