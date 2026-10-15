@@ -2,7 +2,7 @@ import {diagramImpact} from './diagram-impact.js';
 import {icon} from './architecture-icons.js';
 import {inventorySignature} from './service-facts.js';
 import {openConnections} from './connection-manager.js';
-import {groupArchitecture,roles,roleFor,moveDiagramItem,connectionNodes} from './architecture-groups.js';
+import {groupArchitecture,isContainer,attachToContainer,roles,roleFor,moveDiagramItem,connectionNodes} from './architecture-groups.js';
 import {arrangeArchitecture,renderArchitecture,types,zones,zoneFor} from './architecture-view.js';
 import {generateArchitecture,environments} from './architecture-model.js';
 const $=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -96,20 +96,27 @@ $('fit').onclick=fit;
 new ResizeObserver(()=>{if(ready)scheduleCamera();}).observe($('viewport'));
 function inspector(){if(selected?.kind==='arrow'){$('inspector').innerHTML='<h2>Arrow</h2><p>Visual annotation. No linked items.</p><button id="reverse-arrow" class="btn">Reverse direction</button><button id="delete" class="btn danger">Delete arrow</button>';$('delete').onclick=()=>{graph.arrows=(graph.arrows||[]).filter(a=>a.id!==selected.id);selected=null;changed();draw();inspector();};$('reverse-arrow').onclick=()=>{const a=graph.arrows.find(a=>a.id===selected.id);[a.x1,a.x2]=[a.x2,a.x1];[a.y1,a.y2]=[a.y2,a.y1];changed();draw();};return;}
 if(!selected||selected.kind!=='node'||!graph.nodes.some(n=>n.id===selected.id)){groupInspector();return;}const item=selected&&(selected.kind==='node'?graph.nodes:graph.edges).find(x=>x.id===selected.id);if(!item){$('inspector').innerHTML='<h2>Diagram overview</h2><p>'+graph.nodes.length+' components · '+graph.edges.length+' recorded connections</p><p>Drag the corner handle to resize a component. Select a component to edit its type or zone.</p>'+graph.edges.map(e=>{const a=connectionNodes(graph).find(n=>n.id===e.source),b=connectionNodes(graph).find(n=>n.id===e.target);return `<p dir="ltr">${esc(a?.label)} → ${esc(b?.label)}<br><b>${esc([e.source.startsWith('group:')||e.target.startsWith('group:')?'Group-level link':'Component link',e.type,e.protocol,e.port].filter(Boolean).join(' · '))}</b></p>`;}).join('')+'<h2>Unconnected components</h2>'+graph.nodes.filter(n=>!graph.edges.some(e=>e.source===n.id||e.target===n.id)).map(n=>`<p>${esc(n.label)} — Relationship requires confirmation</p>`).join('');return;}
- const node=selected.kind==='node';const fields=node?[['label','Component name'],['displayMode','Display as'],['hostingLocation','Hosting / site'],['type','Component type / Icon'],['architectureRole','Architecture role'],['zone','Zone / Group'],['ip','IP / Address'],['environment','Environment'],['notes','Notes']]:[['source','Source'],['target','Destination'],['type','Connection type (NAT / GSN / VPN…)'],['protocol','Protocol'],['port','Port'],['notes','Notes']];
+ const node=selected.kind==='node';const fields=isContainer(item)?[['label','Group name'],['listenerIp','Listener IP'],['notes','Notes']]:node?[['label','Component name'],['displayMode','Display as'],['hostingLocation','Hosting / site'],['type','Component type / Icon'],['architectureRole','Architecture role'],['zone','Zone / Group'],['ip','IP / Address'],['environment','Environment'],['notes','Notes']]:[['source','Source'],['target','Destination'],['type','Connection type (NAT / GSN / VPN…)'],['protocol','Protocol'],['port','Port'],['notes','Notes']];
  $('inspector').innerHTML=`<h2>${node?'Component details':'Connection details'}</h2>`+fields.map(([key,label])=>`<label for="edit-${key}">${label}</label>${key==='hostingLocation'?`<select id="edit-hostingLocation">${['','GCP','NIC','SALAM','DR'].map(v=>`<option value="${v}" ${(item.hostingLocation||'')===v?'selected':''}>${v||'Not specified'}</option>`).join('')}</select>`:key==='displayMode'?`<select id="edit-displayMode"><option value="separate" ${item.displayMode==='separate'?'selected':''}>Separate item</option><option value="grouped" ${item.displayMode!=='separate'?'selected':''}>Group with similar items</option></select>`:node&&['type','zone','architectureRole'].includes(key)?`<select id="edit-${key}">${(key==='type'?[...new Set([...types,item.type])]:key==='architectureRole'?roles:zones).map(v=>`<option ${(item[key]||(key==='zone'?zoneFor(item):key==='architectureRole'?roleFor(item):''))===v?'selected':''}>${esc(v)}</option>`).join('')}</select>`:key==='environment'?`<select id="edit-${key}">${environments.map(env=>`<option ${item[key]===env?'selected':''}>${esc(env)}</option>`).join('')}</select>`:['source','target'].includes(key)?`<select id="edit-${key}">${graph.nodes.map(n=>`<option value="${esc(n.id)}" ${item[key]===n.id?'selected':''}>${esc(n.label)}</option>`).join('')}</select>`:key==='notes'?`<textarea id="edit-${key}">${esc(item[key])}</textarea>`:`<input id="edit-${key}" value="${esc(item[key])}" maxlength="1000">`}`).join('')+(node?'':'<button id="reverse" class="btn">Reverse direction</button>')+'<button id="apply" class="btn primary">Apply changes</button><button id="delete" class="btn danger">Remove from diagram</button>';
+ if(node&&!isContainer(item)){
+ const label=document.createElement('label');label.textContent='Container group';
+ const select=document.createElement('select');select.innerHTML='<option value="">No container</option>'+graph.nodes.filter(isContainer).map(n=>`<option value="${esc(n.id)}" ${item.parentId===n.id?'selected':''}>${esc(n.label)}</option>`).join('');
+ select.onchange=()=>{if(select.value)addToGroup(item,graph.nodes.find(n=>n.id===select.value));else{delete item.parentId;item.displayMode='separate';changed();draw();inspector();}};
+ $('inspector').append(label,select);
+ }
+ if(isContainer(item)){const help=document.createElement('p');help.textContent='Drop components inside to group them. Drag the header to move the whole group. Drag a member outside to remove it. Removing this group keeps its components.';$('inspector').append(help);}
  if(node){addImpactButton(item.id);const button=document.createElement('button');button.className='btn';button.textContent='＋ Connect from this component';button.onclick=()=>connections({source:item.id});$('inspector').prepend(button);}
  if(!node)$('reverse').onclick=()=>{[item.source,item.target]=[item.target,item.source];changed();draw();inspector();};
  $('apply').onclick=()=>{const values=Object.fromEntries(fields.map(([key])=>[key,$('edit-'+key).value.trim()]));if(node&&!values.label)return status('Component name is required');if(!node&&values.source===values.target)return status('Choose different source and destination components');const before=visibleGraph(),oldGroup=before.membership.get(item.id),oldPosition=before.nodes.find(n=>n.id===oldGroup?.id);
  graph.positions=[...(graph.positions||[]).filter(p=>!before.nodes.some(n=>n.id===p.id)),...before.nodes.map(n=>({id:n.id,x:n.x,y:n.y}))];
- Object.assign(item,values);
+ Object.assign(item,values);if(isContainer(item)||item.parentId)item.displayMode='separate';
  const after=groupArchitecture(graph),newGroup=after.membership.get(item.id);
  if(oldGroup?.id!==newGroup?.id){
  if(!after.nodes.some(n=>n.id===oldGroup.id))for(const e of graph.edges){if(e.source===oldGroup.id)e.source=newGroup.id;if(e.target===oldGroup.id)e.target=newGroup.id;}
  if(oldPosition&&!graph.positions.some(p=>p.id===newGroup.id))graph.positions.push({id:newGroup.id,x:Math.min(9700,oldPosition.x+320),y:oldPosition.y});
  }
  graph.edges=graph.edges.filter(e=>e.source!==e.target);changed();focusComponent(item.id);};
- $('delete').onclick=()=>{if(!confirm('Delete the selected component or connection from this diagram?'))return;if(node){graph.nodes=graph.nodes.filter(n=>n.id!==item.id);graph.edges=graph.edges.filter(e=>e.source!==item.id&&e.target!==item.id);}else graph.edges=graph.edges.filter(e=>e.id!==item.id);selected=null;changed();draw();inspector();};
+ $('delete').onclick=()=>{if(!confirm('Delete the selected component or connection from this diagram?'))return;if(node){for(const child of graph.nodes.filter(n=>n.parentId===item.id))delete child.parentId;graph.nodes=graph.nodes.filter(n=>n.id!==item.id);graph.edges=graph.edges.filter(e=>e.source!==item.id&&e.target!==item.id);}else graph.edges=graph.edges.filter(e=>e.id!==item.id);selected=null;changed();draw();inspector();};
 }
 function deleteSelectedLine(){
  if(selected?.kind!=='edge')return;
@@ -172,7 +179,7 @@ $('canvas').addEventListener('pointermove',e=>{
  const n=visibleGraph().nodes.find(n=>n.id===gesture.connector);if(n){let preview=$('connector-preview');if(!preview){preview=document.createElementNS('http://www.w3.org/2000/svg','path');preview.id='connector-preview';preview.setAttribute('fill','none');preview.setAttribute('stroke','#86ccff');preview.setAttribute('stroke-width','3');preview.setAttribute('stroke-dasharray','7 5');preview.setAttribute('pointer-events','none');$('canvas').append(preview);}preview.setAttribute('d',`M${n.x+(n.width||224)/2} ${n.y+(n.height||116)/2} L${camera.x+p.x/zoom} ${camera.y+p.y/zoom}`);}
  }else if(gesture.item){
  const n=gesture.item;moveDiagramItem(graph,visibleGraph(),n.id,n.x+(p.x-gesture.start.x)/zoom,n.y+(p.y-gesture.start.y)/zoom);
- gesture.itemMoved=true;selected={kind:'node',id:n.id};dropGroupId=groupDropTarget(e,graph.nodes.find(item=>item.id===n.id))?.id||null;if(dropGroupId)status('Release to add this item to the highlighted group');scheduleItemDraw();
+ gesture.itemMoved=true;selected={kind:'node',id:n.id};dropGroupId=groupDropTarget(e,graph.nodes.find(item=>item.id===n.id)||visibleGraph().nodes.find(item=>item.id===n.id))?.id||null;if(dropGroupId)status('Release to add this item to the highlighted group');scheduleItemDraw();
  }else{camera.x-=(p.x-gesture.last.x)/zoom;camera.y-=(p.y-gesture.last.y)/zoom;scheduleCamera();}
  }
  gesture.last=p;$('viewport').classList.add('is-panning');
@@ -185,7 +192,7 @@ function endPointer(e){
  $('connector-preview')?.remove();
  if(done?.freeArrow){if(e.type==='pointerup'&&done.moved){const p=localPoint(e),id=crypto.randomUUID();graph.arrows=[...(graph.arrows||[]),{id,x1:done.freeArrow.x,y1:done.freeArrow.y,x2:Math.max(0,Math.min(10000,camera.x+p.x/zoom)),y2:Math.max(0,Math.min(10000,camera.y+p.y/zoom))}];selected={kind:'arrow',id};changed();setTool(false);draw();inspector();}return;}
  if(done?.connector){if(e.type==='pointerup'){const target=dropNodeAt(e,done.connector);if(target)connectDroppedItems(done.connector,target);else beginHandleConnection(done.connector,null);}return;}
- if(done?.itemMoved){const item=graph.nodes.find(n=>n.id===done.item?.id),target=e.type==='pointerup'&&groupDropTarget(e,item);dropGroupId=null;if(target){if(addToGroup(item,target))return;moveDiagramItem(graph,visibleGraph(),item.id,done.item.x,done.item.y);}changed();draw();inspector();}
+ if(done?.itemMoved){const item=graph.nodes.find(n=>n.id===done.item?.id)||visibleGraph().nodes.find(n=>n.id===done.item?.id),target=e.type==='pointerup'&&groupDropTarget(e,item);dropGroupId=null;if(item?.parentId&&!target&&e.type==='pointerup')delete item.parentId;if(target){if(addToGroup(item,target))return;moveDiagramItem(graph,visibleGraph(),item.id,done.item.x,done.item.y);}changed();draw();inspector();}
  if(e.type!=='pointerup'||done?.moved||done?.button!==0||handTool||spacePan)return;
  if(done.target?.dataset.node)choose('node',done.target.dataset.node);
  else if(done.target?.dataset.edge)choose('edge',done.target.dataset.edge);
@@ -211,12 +218,21 @@ $('canvas').addEventListener('keydown',e=>{
  e.preventDefault();scheduleCamera();
 });
 function groupDropTarget(e,item){
- if(!item||item.displayMode!=='separate')return null;
+ if(!item||isContainer(item))return null;
  const p=localPoint(e),x=camera.x+p.x/zoom,y=camera.y+p.y/zoom,view=visibleGraph();
+ const container=view.nodes.find(n=>isContainer(n)&&n.id!==item.id&&x>=n.x&&x<=n.x+n.width&&y>=n.y&&y<=n.y+n.height);if(container)return container;
+ if(item.displayMode!=='separate')return null;
  const node=view.nodes.find(n=>n.isGroup&&x>=n.x&&x<=n.x+(n.width||224)&&y>=n.y&&y<=n.y+(n.height||116));
  const group=view.groups.find(g=>g.id===node?.id);return group&&group.role===roleFor(item)?group:null;
 }
 function addToGroup(item,group){
+ if(isContainer(group)){
+ const view=visibleGraph(),container=graph.nodes.find(n=>n.id===group.id);
+ const members=item.isGroup?view.groups.find(g=>g.id===item.id)?.members||[]:[item];
+ for(const member of members)attachToContainer(graph,view,member,container);
+ if(item.isGroup)for(const edge of graph.edges){if(edge.source===item.id)edge.source=container.id;if(edge.target===item.id)edge.target=container.id;}
+ graph.edges=graph.edges.filter(e=>e.source!==e.target);dropGroupId=null;selected={kind:'node',id:item.isGroup?container.id:item.id};changed();draw();inspector();status('Added to '+container.label);return true;
+ }
  const context=[group.environment,group.hostingLocation].filter(Boolean).join(' · ');
  if(!confirm(`Add "${item.label}" to ${group.role} (${context})?\nIt will use this group's environment and hosting site. Existing connections will remain.`))return false;
  Object.assign(item,{displayMode:'grouped',architectureRole:group.role,environment:group.environment,hostingLocation:group.hostingLocation||''});
@@ -227,13 +243,13 @@ function addShape(type,point){
  const hostingLocation=/^(GCP|NIC|SALAM|DR) VM$/.test(type)?type.split(' ')[0]:'';if(hostingLocation)type='VM';
  const v=$('viewport'),id=crypto.randomUUID(),before=visibleGraph();
  const x=Math.max(0,Math.round((point?.x??camera.x+v.clientWidth/zoom/2)-112)),y=Math.max(0,Math.round((point?.y??camera.y+v.clientHeight/zoom/2)-58));
- graph.nodes.push({id,type,label:type,displayMode:'separate',hostingLocation,ip:'',environment:hostingLocation==='DR'?'DR':'Not specified',notes:'',x,y});
+ graph.nodes.push({id,type,label:type,...(isContainer({type})?{width:520,height:300,listenerIp:''}:{}),displayMode:'separate',hostingLocation,ip:'',environment:hostingLocation==='DR'?'DR':'Not specified',notes:'',x,y});
  graph.positions=[...(graph.positions||[]).filter(p=>!before.nodes.some(n=>n.id===p.id)),...before.nodes.map(n=>({id:n.id,x:n.x,y:n.y})),{id,x,y}];
 
  linkMode=false;linkSource=null;projection=null;selected={kind:'node',id};changed();draw();inspector();
 }
 $('add').onclick=()=>addShape($('type').value);
-const shapeSections={'Compute':['VM','Server','GCP VM','NIC VM','SALAM VM','DR VM','OpenShift','Docker'],'Network & security':['Load Balancer','Firewall','WAF','DNS','VPN','MPLS','GSN'],'Data & integration':['Database','Storage','API','Message Queue','Cloud','User']};
+const shapeSections={'Groups':['Database Cluster','Application Group'],'Compute':['VM','Server','GCP VM','NIC VM','SALAM VM','DR VM','OpenShift','Docker'],'Network & security':['Load Balancer','Firewall','WAF','DNS','VPN','MPLS','GSN'],'Data & integration':['Database','Storage','API','Message Queue','Cloud','User']};
 function renderPalette(){const query=$('shape-search').value.toLowerCase();$('shape-list').innerHTML=Object.entries(shapeSections).map(([title,items])=>{const found=items.filter(t=>t.toLowerCase().includes(query));return found.length?`<section class="shape-section"><h3>${title}</h3><div class="shape-grid">${found.map(type=>`<button class="shape-tile" draggable="true" data-shape="${type}" title="Drag or click to add ${type}"><svg viewBox="0 0 64 64" aria-hidden="true">${icon(type)}</svg><span>${type}</span></button>`).join('')}</div></section>`:'';}).join('')||'<p>No matching shapes. Try More components below.</p>';$('shape-list').querySelectorAll('[data-shape]').forEach(b=>{b.onclick=()=>addShape(b.dataset.shape);b.ondragstart=e=>{e.dataTransfer.setData('application/x-hub-shape',b.dataset.shape);e.dataTransfer.effectAllowed='copy';};});}
 $('shape-search').oninput=renderPalette;renderPalette();
 $('viewport').addEventListener('dragover',e=>{if([...e.dataTransfer.types].includes('application/x-hub-shape')){e.preventDefault();e.dataTransfer.dropEffect='copy';}});
@@ -271,3 +287,4 @@ $('canvas').addEventListener('dblclick',e=>{if(linkMode||handTool)return;const i
 window.addEventListener('themechange',()=>{if(ready)draw();});
 const requestedFocus=new URLSearchParams(location.search).get('focus');
 if(ready&&requestedFocus){const target=graph.nodes.find(n=>[n.label,n.ip].some(v=>String(v||'').toLowerCase()===requestedFocus.toLowerCase()));if(target){focusComponent(target.id);const view=visibleGraph(),shown=view.nodes.find(n=>n.id===(view.membership.get(target.id)?.id||target.id));if(shown){zoom=1;camera.x=shown.x-$('viewport').clientWidth/2+(shown.width||224)/2;camera.y=shown.y-$('viewport').clientHeight/2+(shown.height||116)/2;applyCamera();}}else status('No matching item in this saved diagram. Review current records or regenerate the diagram.');}
+
