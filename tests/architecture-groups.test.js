@@ -74,3 +74,50 @@ test('hosting locations remain distinct and their identities survive validation'
  assert.equal(roleFor({type:'GSN'}),'Integrations');
  assert.equal(roleFor({type:'Docker'}),'Applications');
 });
+
+
+// Explicit containers retain visible equipment and exact connection endpoints.
+import {attachToContainer,moveDiagramItem} from '../public/architecture-groups.js';
+import {renderArchitecture} from '../public/architecture-view.js';
+test('cluster membership, listener address and visible children survive persistence and movement',()=>{
+ const cluster={id:'cluster',label:'Orders SQL',type:'Database Cluster',listenerIp:'10.20.1.50',x:100,y:100,width:520,height:300};
+ const a={id:'db1',label:'SQL primary',type:'Database',x:700,y:100},b={id:'db2',label:'SQL secondary',type:'Database',x:700,y:300};
+ const graph={nodes:[cluster,a,b],edges:[{id:'sync',source:'db1',target:'db2'}]};
+ let view=groupArchitecture(graph);
+ attachToContainer(graph,view,a,cluster);attachToContainer(graph,view,b,cluster);
+ const saved=validateGraph(graph);view=groupArchitecture(saved);
+ assert.equal(saved.nodes[0].listenerIp,'10.20.1.50');
+ assert.equal(view.nodes.length,3);assert.equal(view.groups.length,0);
+ assert.equal(view.edges[0].source,'db1');assert.equal(view.edges[0].target,'db2');
+ for(const node of view.nodes.filter(n=>n.parentId)){
+ assert.equal(node.parentId,'cluster');assert.ok(node.x>=cluster.x&&node.y>=cluster.y+84);
+ assert.ok(node.y+node.height<=cluster.y+cluster.height);
+ }
+ const before=view.nodes.map(n=>({...n}));moveDiagramItem(saved,view,'cluster',200,250);
+ for(const node of view.nodes){const old=before.find(n=>n.id===node.id);assert.equal(node.x,old.x+100);assert.equal(node.y,old.y+150);}
+ view=groupArchitecture(validateGraph(saved));
+ assert.equal(view.nodes.find(n=>n.id==='db1').x,224);
+ const svg=renderArchitecture(view,null,null).svg;
+ assert.match(svg,/Listener IP: 10.20.1.50/);assert.match(svg,/SQL primary/);assert.match(svg,/SQL secondary/);
+ assert.ok(svg.indexOf('cluster-frame')<svg.indexOf('data-node="db1"'));
+});
+test('application containers persist and invalid or nested memberships are rejected',()=>{
+ const app={id:'apps',label:'Application tier',type:'Application Group',x:10,y:10,width:520,height:600};
+ const vm={id:'vm',label:'App 1',type:'VM',parentId:'apps',x:34,y:110};
+ const saved=validateGraph({nodes:[app,vm],edges:[]});
+ assert.equal(saved.nodes[0].height,600);assert.equal(saved.nodes[1].parentId,'apps');
+ assert.equal(groupArchitecture(saved).nodes.length,2);
+ assert.throws(()=>validateGraph({nodes:[{...app,parentId:'apps'},vm],edges:[]}),/nested/);
+ assert.throws(()=>validateGraph({nodes:[app,{...vm,parentId:'missing'}],edges:[]}),/membership/);
+});
+test('adding a member after removing another leaves remaining members unobscured',()=>{
+ const cluster={id:'c',label:'DBs',type:'Database Cluster',x:0,y:0,width:520,height:300};
+ const graph={nodes:[cluster,...['a','b','d'].map(id=>({id,label:id,type:'Database',x:0,y:0}))],edges:[]};
+ let view=groupArchitecture(graph);
+ for(const n of graph.nodes.slice(1))attachToContainer(graph,view,n,cluster);
+ delete graph.nodes[2].parentId;
+ const next={id:'e',label:'New DB',type:'Database',x:0,y:0};graph.nodes.push(next);
+ view=groupArchitecture(graph);attachToContainer(graph,view,next,cluster);
+ assert.ok(next.y>=graph.nodes[3].y+116+24);
+ assert.equal(attachToContainer(graph,view,cluster,cluster),false);
+});
