@@ -23,7 +23,7 @@ const record=name=>({service:{name,code:'TST'},Servers:[],Components:[],Endpoint
 test('server enforces admin writes and records reliable identity across every mutation area',async()=>{
  try{
  assert.equal((await request('/api/services')).status,200);
- for(const [method,url] of [['POST','/api/services'],['PUT','/api/services/example'],['DELETE','/api/services/example'],['POST','/api/import/preview'],['POST','/api/import/commit'],['POST','/api/references'],['PUT','/api/references/example'],['DELETE','/api/references/example'],['PUT','/api/services/example/architecture'],['POST','/api/users'],['PUT','/api/users/example']]){
+ for(const [method,url] of [['POST','/api/tpms'],['POST','/api/services'],['PUT','/api/services/example'],['DELETE','/api/services/example'],['POST','/api/import/preview'],['POST','/api/import/commit'],['POST','/api/references'],['PUT','/api/references/example'],['DELETE','/api/references/example'],['PUT','/api/services/example/architecture'],['POST','/api/users'],['PUT','/api/users/example']]){
  assert.equal((await request(url,{method,body:{}})).status,401,url);
  }
  assert.equal((await request('/api/users')).status,401);
@@ -31,6 +31,11 @@ test('server enforces admin writes and records reliable identity across every mu
  assert.equal((await request('/api/auth/login',{method:'POST',body:{username:'admin',password:'wrong'}})).status,401);
  const signed=await request('/api/auth/login',{method:'POST',body:{username:'admin',password}});assert.equal(signed.status,200);assert.match(signed.headers.get('set-cookie'),/HttpOnly/);assert.match(signed.headers.get('set-cookie'),/SameSite=Strict/);
  const cookie=signed.cookie;
+ const tpm=await request('/api/tpms',{method:'POST',cookie,body:{name:'  Sample   TPM  '}});assert.equal(tpm.status,201);assert.equal(tpm.body.name,'Sample TPM');
+ const duplicate=await request('/api/tpms',{method:'POST',cookie,body:{name:'sample tpm'}});assert.equal(duplicate.body.name,'Sample TPM');
+ assert.deepEqual((await request('/api/tpms')).body,['Sample TPM']);
+ assert.equal((await request('/api/tpms',{method:'POST',cookie,body:{name:' '}})).status,400);
+ 
  assert.equal((await request('/api/services',{method:'POST',cookie,csrf:false,body:record('Blocked')})).status,403);
  const viewer=await request('/api/users',{method:'POST',cookie,body:{username:'viewer',name:'Viewer Person',role:'viewer',password}});assert.equal(viewer.status,201);
  const viewerCookie=(await request('/api/auth/login',{method:'POST',body:{username:'viewer',password}})).cookie;
@@ -49,7 +54,7 @@ test('server enforces admin writes and records reliable identity across every mu
  const history=(await request('/api/history',{cookie})).body;
  assert.ok(history.items.some(e=>e.action==='Updated service'&&e.status==='completed'&&e.changes.some(c=>c.field==='service.name'&&c.before==='Original'&&c.after==='Renamed')));
  assert.ok(history.items.some(e=>e.action==='Updated service'&&e.status==='rejected'));
- for(const kind of ['services','architecture','references','imports','users'])assert.ok(history.items.some(e=>e.kind===kind&&e.status==='completed'),kind);
+ for(const kind of ['services','architecture','references','imports','users','tpms'])assert.ok(history.items.some(e=>e.kind===kind&&e.status==='completed'),kind);
  assert.ok(history.items.every(e=>e.actor.username==='admin'));
  assert.ok(!(await request('/api/history',{cookie:viewerCookie})).body.items.some(e=>e.kind==='users'));
  assert.ok(!JSON.stringify(history).includes(password));

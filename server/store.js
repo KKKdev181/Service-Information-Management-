@@ -8,7 +8,7 @@ import { readLegacyBuffer } from './legacy.js';
 const directory = path.resolve(process.env.DATA_DIR || './data');
 const file = path.join(directory, 'services.xlsx');
 const sheets = {
-  Services: ['id', 'name', 'code', 'customer', 'owner', 'status', 'environment', 'description', 'updatedAt', 'updatedBy', 'revision', 'createdAt', 'hostingLocations', 'hostingType', 'serverCount'],
+  Services: ['id', 'name', 'code', 'customer', 'owner', 'status', 'environment', 'description', 'updatedAt', 'updatedBy', 'revision', 'createdAt', 'hostingLocations', 'hostingType', 'serverCount', 'tpmName'],
   Components: ['id','serviceId','name','type','environment','site','cluster','namespace','url','role','notes'],
   Servers: ['id', 'serviceId', 'name', 'environment', 'role', 'privateIp', 'publicIp', 'os', 'site', 'domain', 'cpu', 'ram', 'storage', 'notes', 'zone', 'platform'],
   Endpoints: ['id', 'serviceId', 'url', 'dns', 'vip', 'port', 'protocol', 'environment', 'publicIp', 'wafIp', 'notes'],

@@ -2,7 +2,7 @@ import {identify,mutationGuard,adminOnly,login,logout,listUsers,saveUser} from '
 import {audited,readHistory} from './history.js';
 import { readArchitecture, saveArchitecture } from './architecture.js';
 import express from 'express';
-import { listReferences, saveReference, deleteReference } from './references.js';
+import { listReferences, saveReference, deleteReference, listTpms, addTpm } from './references.js';
 import { Worker } from 'node:worker_threads';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -26,6 +26,12 @@ app.put('/api/users/:id',asyncRoute(async(req,res)=>res.json(await audited(req.u
 app.get('/api/history',asyncRoute(async(req,res)=>res.json(await readHistory({offset:Math.max(0,Math.min(1000000,parseInt(req.query.offset)||0)),query:String(req.query.q||'').slice(0,200),kind:String(req.query.kind||''),entityId:String(req.query.entityId||''),includeUsers:req.user?.role==='admin'}))));
 const serviceBefore=async id=>(await list()).find(x=>x.service.id===id)||null;
 const referenceBefore=async id=>(await listReferences()).find(x=>x.id===id)||null;
+app.get('/api/tpms',asyncRoute(async(req,res)=>{
+ const names=[...await listTpms(),...(await list()).map(r=>r.service.tpmName).filter(Boolean)];
+ const unique=new Map();for(const name of names){const key=name.normalize('NFKC').trim().replace(/\s+/g,' ').toLowerCase();if(!unique.has(key))unique.set(key,name);}
+ res.json([...unique.values()].sort((a,b)=>a.localeCompare(b)));
+}));
+app.post('/api/tpms',asyncRoute(async(req,res)=>res.status(201).json(await audited(req.user,{kind:'tpms',action:'Added TPM name',label:req.body?.name},listTpms,()=>addTpm(req.body),listTpms))));
 app.get('/api/references', asyncRoute(async(req,res)=>res.json(await listReferences())));
 app.post('/api/references', asyncRoute(async(req,res)=>res.status(201).json(await audited(req.user,{kind:'references',action:'Added reference',label:req.body.name},async()=>null,()=>saveReference(null,{...req.body,updatedBy:req.user.name}),async x=>x))));
 app.put('/api/references/:id', asyncRoute(async(req,res)=>res.json(await audited(req.user,{kind:'references',action:'Updated reference',entityId:req.params.id,label:req.body.name},()=>referenceBefore(req.params.id),()=>saveReference(req.params.id,{...req.body,updatedBy:req.user.name}),async x=>x))));

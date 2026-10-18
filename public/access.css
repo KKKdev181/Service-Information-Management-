@@ -7,3 +7,5 @@
 html[data-access="viewer"] :is([data-action="new"],[data-action="import"],[data-action="edit"],[data-action="edit-section"],[data-action="delete"],[data-action="add-vpn"],[data-ref-action="add"],[data-ref-action="edit"],[data-ref-action="delete"],#nav-users){display:none!important}
 html[data-access="viewer"] :is(#shape-library,#save,#generate,#draw-arrow,#connect,#undo,#redo,#layout,#connections-list,.connection-handle,[data-resize]){display:none!important}
 html[data-access="viewer"] .arch-node{cursor:pointer}
+
+.directory-primary .directory-fields{grid-template-columns:.8fr 1.2fr 1fr .5fr 1.3fr}.tpm-add{margin-top:8px}.tpm-add summary{color:var(--accent);font-size:12px;cursor:pointer}.tpm-add label{display:block;margin-top:12px}.tpm-add-row{display:flex;gap:8px;margin:8px 0}.tpm-add-row input{min-width:0;flex:1}.tpm-add small{color:var(--muted)}#tpm-error{color:#d46262;font-size:12px;margin:6px 0}@media(max-width:1050px){.directory-primary .directory-fields{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:600px){.directory-primary .directory-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}

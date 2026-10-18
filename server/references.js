@@ -69,3 +69,20 @@ export const deleteReference = id=>serialize(async()=>{
   if(!items.some(i=>i.id===id))throw Object.assign(new Error('Reference not found'),{status:404});
   await persist(book,sheet,items.filter(i=>i.id!==id));
 });
+
+// Shared dropdown values stay in DATA_DIR, independently of service deletion.
+const tpmFile=path.join(folder,'tpms.json');
+async function readTpms(){try{return JSON.parse(await fs.readFile(tpmFile,'utf8'));}catch(error){if(error.code==='ENOENT')return [];throw error;}}
+export const listTpms=()=>serialize(readTpms);
+export const addTpm=input=>serialize(async()=>{
+ if(typeof input?.name!=='string')throw invalid('TPM name is required');
+ const name=input.name.normalize('NFKC').trim().replace(/\s+/g,' ');
+ if(!name||name.length>100)throw invalid('Enter a TPM name of 1–100 characters');
+ const names=await readTpms();const existing=names.find(n=>n.toLowerCase()===name.toLowerCase());
+ if(existing)return {name:existing};
+ if(names.length>=2000)throw invalid('The TPM list is full');
+ names.push(name);names.sort((a,b)=>a.localeCompare(b));await fs.mkdir(folder,{recursive:true});
+ const temp=tpmFile+'.'+crypto.randomUUID()+'.tmp';
+ try{await fs.writeFile(temp,JSON.stringify(names,null,2));await fs.rename(temp,tpmFile);}finally{await fs.rm(temp,{force:true});}
+ return {name};
+});
