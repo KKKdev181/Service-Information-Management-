@@ -56,7 +56,7 @@ Saved diagrams are under `DATA_DIR/architecture/<service-id>.json`, with a prior
 
 ## Deployment and persistence
 
-Use one Node process on one host with persistent `DATA_DIR` outside the public directory. Default `HOST=127.0.0.1`, `PORT=3000`. On Windows Server, place IIS with HTTPS and organization-approved authentication in front of Node, disable anonymous access and do not expose port 3000 directly. The app does not implement SSO or role-based authorization; `updatedBy` is manually entered, not verified identity.
+Use one Node process on one host with persistent `DATA_DIR` outside the public directory. Default `HOST=127.0.0.1`, `PORT=3000`. On Windows Server, place IIS with HTTPS in front of Node and do not expose port 3000 directly. Local portal accounts enforce Admin/Viewer permissions on every API write. Visitors can browse without a portal account; keep the site restricted to the intended internal network. Set `COOKIE_SECURE=true` in the Node service environment when IIS serves HTTPS. The app trusts only a loopback reverse proxy for forwarded client information. Active Directory/SSO is not configured.
 
 Back up the entire DATA_DIR, including diagrams. Codespace data lasts only as long as its filesystem. Do not commit real workbooks or architecture data to Git or edit the workbook directly while the application is running.
 
@@ -73,3 +73,20 @@ Back up the entire DATA_DIR, including diagrams. Codespace data lasts only as lo
 - `public/styles.css`: shared design tokens/components; `workspace.css`: service workspace; `architecture.css`: diagram workspace.
 
 Run `node --test tests/*.test.js`. Tests cover data migration, Excel roundtrip, stale saves, duplicate import, naming rules, grouping, connection validation, impact traversal, derived hybrid facts and diagram persistence. See [repository review](docs/REVAMP.md) for product and refactoring decisions.
+
+
+## Accounts and change history
+
+After deploying this update, the portal is view-only until the first admin is created. From the application folder on the server, run:
+
+```powershell
+node scripts/create-admin.js
+```
+
+Use the **same DATA_DIR as the running Node service**. If the service sets DATA_DIR in its startup script, set that same value in this PowerShell session before running the command. With no DATA_DIR override, run from the same application directory as the service (default data path: `./data`). The command prompts for a username, display name and password (12–200 characters, hidden input). It refuses to run if any account already exists. No default credentials or public registration endpoint are provided.
+
+Sign in using the sidebar. Admins can use **Users** to create accounts, change roles, reset passwords, or disable accounts. At least one enabled admin must remain. Admins may edit services, import Excel, edit references and save architecture diagrams. Viewers and signed-out visitors can browse/search/export but cannot save changes. The server enforces this even if someone manually re-enables a hidden control. Account changes invalidate that account's sessions; sessions expire after eight hours or on server restart. Users and salted scrypt password hashes live in `DATA_DIR/users.json`, never in the repository or public folder.
+
+**History** shows the signed-in actor, date/time, action and before/after changes for service create/edit/delete, committed Excel imports, references, saved architecture, and account management. Account-management history is visible only to admins; password values and hashes are never logged. Reordering records with stable IDs is not treated as a content edit. Tracking starts with this deployment; previous edits cannot be reconstructed. Existing automatic workbook migration/naming-rule enrichment remains a system operation and is not attributed to a signed-in user.
+
+History is stored in `DATA_DIR/history/` as server files, not a database. Before a write, a pending entry is persisted; completion includes its diff. Rejected operations are marked rejected. An interrupted write remains visibly unconfirmed so an administrator can inspect the affected record instead of assuming the operation failed. Back up this folder together with users, services and diagrams. Keep DATA_DIR on persistent storage outside the deployed source folder where possible; never delete it during a deployment. Run one Node process (file persistence and sessions are designed for a single instance).

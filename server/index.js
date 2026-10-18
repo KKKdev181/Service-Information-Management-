@@ -1,3 +1,5 @@
+import {identify,mutationGuard,adminOnly,login,logout,listUsers,saveUser} from './access.js';
+import {audited,readHistory} from './history.js';
 import { readArchitecture, saveArchitecture } from './architecture.js';
 import express from 'express';
 import { listReferences, saveReference, deleteReference } from './references.js';
@@ -7,26 +9,39 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { list, upsert, remove, workbookPath, importRecords } from './store.js';
 
-const app = express();
+export const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '10mb' }));
 app.use((req, res, next) => { res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Referrer-Policy', 'no-referrer'); next(); });
+// IIS must forward X-Forwarded-For only from its local proxy.
+app.set('trust proxy','loopback');
+app.use('/api',identify);
+app.get('/api/auth/session',(req,res)=>res.json({user:req.user}));
+app.post('/api/auth/login',asyncRoute(login));
+app.post('/api/auth/logout',logout);
+app.use('/api',mutationGuard);
+app.get('/api/users',adminOnly,asyncRoute(async(req,res)=>res.json(await listUsers())));
+app.post('/api/users',asyncRoute(async(req,res)=>res.status(201).json(await audited(req.user,{kind:'users',action:'Created account',label:req.body.username},async()=>null,()=>saveUser(null,req.body),async user=>user))));
+app.put('/api/users/:id',asyncRoute(async(req,res)=>res.json(await audited(req.user,{kind:'users',action:'Updated account',entityId:req.params.id,label:req.body.username||'Account'},async()=>(await listUsers()).find(u=>u.id===req.params.id)||null,()=>saveUser(req.params.id,req.body),async user=>({...user,...(req.body.password?{password:'Password reset'}:{})})))));
+app.get('/api/history',asyncRoute(async(req,res)=>res.json(await readHistory({offset:Math.max(0,Math.min(1000000,parseInt(req.query.offset)||0)),query:String(req.query.q||'').slice(0,200),kind:String(req.query.kind||''),entityId:String(req.query.entityId||''),includeUsers:req.user?.role==='admin'}))));
+const serviceBefore=async id=>(await list()).find(x=>x.service.id===id)||null;
+const referenceBefore=async id=>(await listReferences()).find(x=>x.id===id)||null;
 app.get('/api/references', asyncRoute(async(req,res)=>res.json(await listReferences())));
-app.post('/api/references', asyncRoute(async(req,res)=>res.status(201).json(await saveReference(null,req.body))));
-app.put('/api/references/:id', asyncRoute(async(req,res)=>res.json(await saveReference(req.params.id,req.body))));
-app.delete('/api/references/:id', asyncRoute(async(req,res)=>{await deleteReference(req.params.id);res.status(204).end();}));
+app.post('/api/references', asyncRoute(async(req,res)=>res.status(201).json(await audited(req.user,{kind:'references',action:'Added reference',label:req.body.name},async()=>null,()=>saveReference(null,{...req.body,updatedBy:req.user.name}),async x=>x))));
+app.put('/api/references/:id', asyncRoute(async(req,res)=>res.json(await audited(req.user,{kind:'references',action:'Updated reference',entityId:req.params.id,label:req.body.name},()=>referenceBefore(req.params.id),()=>saveReference(req.params.id,{...req.body,updatedBy:req.user.name}),async x=>x))));
+app.delete('/api/references/:id', asyncRoute(async(req,res)=>{await audited(req.user,{kind:'references',action:'Deleted reference',entityId:req.params.id},()=>referenceBefore(req.params.id),()=>deleteReference(req.params.id),async()=>null);res.status(204).end();}));
 app.get('/api/services', asyncRoute(async (req, res) => res.json(await list())));
-app.post('/api/services', asyncRoute(async (req, res) => res.status(201).json(await upsert(null, req.body))));
-app.put('/api/services/:id', asyncRoute(async (req, res) => res.json(await upsert(req.params.id, req.body))));
-app.delete('/api/services/:id', asyncRoute(async (req, res) => { await remove(req.params.id); res.status(204).end(); }));
+app.post('/api/services', asyncRoute(async (req, res) => res.status(201).json(await audited(req.user,{kind:'services',action:'Added service',label:req.body.service?.name},async()=>null,()=>upsert(null,{...req.body,updatedBy:req.user.name}),async x=>x))));
+app.put('/api/services/:id', asyncRoute(async (req, res) => res.json(await audited(req.user,{kind:'services',action:'Updated service',entityId:req.params.id,label:req.body.service?.name},()=>serviceBefore(req.params.id),()=>upsert(req.params.id,{...req.body,updatedBy:req.user.name}),async x=>x))));
+app.delete('/api/services/:id', asyncRoute(async (req, res) => { await audited(req.user,{kind:'services',action:'Deleted service',entityId:req.params.id},()=>serviceBefore(req.params.id),()=>remove(req.params.id),async()=>null); res.status(204).end(); }));
 app.get('/api/services/:id/architecture', asyncRoute(async (req,res)=>{if(!(await list()).some(x=>x.service.id===req.params.id))return res.status(404).json({error:'Service not found'});res.json(await readArchitecture(req.params.id));}));
-app.put('/api/services/:id/architecture', asyncRoute(async (req,res)=>{if(!(await list()).some(x=>x.service.id===req.params.id))return res.status(404).json({error:'Service not found'});res.json(await saveArchitecture(req.params.id,req.body));}));
+app.put('/api/services/:id/architecture', asyncRoute(async (req,res)=>{if(!(await list()).some(x=>x.service.id===req.params.id))return res.status(404).json({error:'Service not found'});res.json(await audited(req.user,{kind:'architecture',action:'Saved architecture',entityId:req.params.id,label:(await serviceBefore(req.params.id)).service.name},()=>readArchitecture(req.params.id),()=>saveArchitecture(req.params.id,req.body),async x=>x));}));
 app.get('/api/export', asyncRoute(async (req, res) => res.download(await workbookPath(), 'service-implementation.xlsx')));
 app.post('/api/import/preview', express.raw({ type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', limit: '12mb' }), asyncRoute(async (req, res) => {
   const filename = decodeURIComponent(req.get('X-Import-Filename') || '');
   res.json(await previewInWorker(req.body, filename));
 }));
-app.post('/api/import/commit', asyncRoute(async (req, res) => res.json(await importRecords(req.body.records))));
+app.post('/api/import/commit', asyncRoute(async (req, res) => res.json(await audited(req.user,{kind:'imports',action:'Imported Excel',label:'Excel import'},list,()=>importRecords(req.body.records,req.user.name),list))));
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public');
 app.get('/vendor/elk.bundled.js', (req,res)=>res.sendFile(createRequire(import.meta.url).resolve('elkjs/lib/elk.bundled.js')));
 app.use(express.static(publicDir));
@@ -40,7 +55,7 @@ app.use((err, req, res, next) => {
 function asyncRoute(fn) { return (req, res, next) => Promise.resolve(fn(req, res)).catch(next); }
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || '127.0.0.1';
-app.listen(port, host, () => console.log(`Service portal: http://${host}:${port}`));
+if(process.env.NODE_ENV!=='test')app.listen(port, host, () => console.log(`Service portal: http://${host}:${port}`));
 
 
 // Keep untrusted/heavy Excel parsing out of the web server process.

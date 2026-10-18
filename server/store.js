@@ -173,7 +173,7 @@ export async function previewWorkbook(buffer, filename='') {
   return records.map(item => {applyServerRules(item);return { ...item, service: Object.fromEntries(sheets.Services.map(k => [k, item.service[k]])) };});
 }
 
-export const importRecords = items => serialize(async () => {
+export const importRecords = (items,actor='Import Excel') => serialize(async () => {
   if (!Array.isArray(items) || items.length > 1000) throw Object.assign(new Error('Invalid service count'), { status: 400 });
   const book = await readBook();
   const current = Object.fromEntries(Object.keys(sheets).map(name => [name, rows(book, name)]));
@@ -186,7 +186,7 @@ export const importRecords = items => serialize(async () => {
     const identity = `${code.toLowerCase()}|${name.toLowerCase()}`;
     if (known.has(identity)) { skipped++; continue; }
     const id = crypto.randomUUID();
-    current.Services.push({ ...Object.fromEntries(sheets.Services.map(key => [key, safe(item.service[key])])), id, name, code, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'Import Excel', revision: '1' });
+    current.Services.push({ ...Object.fromEntries(sheets.Services.map(key => [key, safe(item.service[key])])), id, name, code, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: safe(actor), revision: '1' });
     for (const section of children) {
       for (const row of item[section]) current[section].push({ ...Object.fromEntries(sheets[section].map(key => [key, safe(row[key])])), id: crypto.randomUUID(), serviceId: id });
     }
