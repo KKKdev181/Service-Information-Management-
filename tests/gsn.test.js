@@ -1,0 +1,32 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {gsnSection} from '../public/service-workspace.js';
+const dir=await fs.mkdtemp(path.join(os.tmpdir(),'hub-gsn-'));
+process.env.DATA_DIR=dir;
+const store=await import('../server/store.js');
+test.after(()=>fs.rm(dir,{recursive:true,force:true}));
+const connection={type:'GSN',gsnDirection:'ELM → Partner (ELM is Consumer)',partnerName:'Example',environment:'Dev/QA',sourceIp:'192.0.2.1\n192.0.2.2',snatIp:'198.51.100.1',protocol:'TCP',port:'5718',destinationIp:'203.0.113.1',loadBalancer:'203.0.113.2',lbPorts:'443',elmServer:'192.0.2.3\n192.0.2.4'};
+test('GSN fields survive server save and workbook export/import',async()=>{
+ const saved=await store.upsert(null,{service:{name:'GSN example',code:'GSN'},Servers:[],Endpoints:[],LoadBalancers:[],Networks:[],Connections:[connection]});
+ const loaded=(await store.list()).find(r=>r.service.id===saved.service.id);
+ for(const [k,v] of Object.entries(connection))assert.equal(loaded.Connections[0][k],v);
+ const parsed=await store.previewWorkbook(await fs.readFile(await store.workbookPath()));
+ for(const [k,v] of Object.entries(connection))assert.equal(parsed[0].Connections[0][k],v);
+ await store.remove(saved.service.id);
+ await store.importRecords(parsed);
+ for(const [k,v] of Object.entries(connection))assert.equal((await store.list())[0].Connections[0][k],v);
+});
+test('GSN tables distinguish directions, preserve multiline addresses and escape input',()=>{
+ const html=gsnSection({service:{id:'example'},Connections:[connection,{...connection,gsnDirection:'Partner → ELM (ELM is Publisher)'},{...connection,gsnDirection:'',partnerName:'<script>bad</script>'},{type:'VPN',sourceIp:'vpn-only'}]});
+ assert.match(html,/From ELM to Example · ELM is Consumer/);
+ assert.match(html,/From Example to ELM · ELM is Publisher/);
+ assert.match(html,/<th>VIP<\/th>/);
+ assert.match(html,/Direction not specified/);
+ assert.match(html,/192\.0\.2\.1\n192\.0\.2\.2/);
+ assert.match(html,/&lt;script&gt;bad&lt;\/script&gt;/);
+ assert.doesNotMatch(html,/<script>|vpn-only/);
+ assert.equal((html.match(/<table>/g)||[]).length,3);
+});
