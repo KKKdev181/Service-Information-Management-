@@ -61,6 +61,8 @@ function showModal(){if(!access.canEdit)return;document.body.insertAdjacentHTML(
 function rerenderModal(){document.querySelector('#backdrop')?.remove();showModal()}
 function closeModal(){document.querySelector('#backdrop')?.remove();draft=null;editingId=null;returnFocus?.focus();}
 app.addEventListener('click', async e=>{const b=e.target.closest('[data-action]');if(!b)return;const action=b.dataset.action;if(!access.canEdit&&['new','edit','edit-section','add-vpn','add-gsn','delete','import'].includes(action))return;
+if(action==='server-expand'){const row=document.getElementById(b.getAttribute('aria-controls'));if(!row)return;const open=b.getAttribute('aria-expanded')!=='true';b.setAttribute('aria-expanded',String(open));b.textContent=open?'−':'＋';row.hidden=!open;return;}
+if(action==='server-sort'){const key=b.dataset.key;workspace.serverDescending=(workspace.serverSort||'name')===key?!workspace.serverDescending:false;workspace.serverSort=key;const scroll=document.querySelector('.server-table-scroll')?.scrollLeft||0;render();const table=document.querySelector('.server-table-scroll');if(table)table.scrollLeft=scroll;document.querySelector(`[data-action="server-sort"][data-key="${key}"]`)?.focus({preventScroll:true});return;}
 if(action==='workspace-tab'){workspace.tab=b.dataset.tab;workspace.query='';render();return;}
 if(action==='workspace-environment'){workspace.tab='infrastructure';workspace.environment=b.dataset.environment;render();return;}
 if(action==='workspace-reset'){workspace.environment='';workspace.query='';render();return;}
