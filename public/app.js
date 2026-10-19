@@ -1,3 +1,4 @@
+import {initServiceImport} from './service-import.js';
 import {access,apiFetch,accountNav,historyPage,usersPage,loginPage} from './access.js';
 accountNav();
 import {referencePage} from './references.js';
@@ -12,7 +13,7 @@ const schemas = {
   Components:[['name','Component name'],['type','Platform type'],['environment','Environment'],['site','Hosting location'],['cluster','Cluster'],['namespace','Namespace'],['url','Endpoint / URL'],['role','Role'],['notes','Notes']],
   Servers: [['name','Server name'],['environment','Environment'],['role','Role'],['platform','Platform'],['privateIp','Private IP'],['publicIp','Public IP'],['os','Operating system'],['site','Hosting location'],['zone','Zone'],['domain','Domain'],['cpu','CPU Cores'],['ram','RAM (GB)'],['storage','Storage'],['notes','Notes']],
   Endpoints: [['url','Endpoint / URL'],['dns','DNS'],['vip','LB IP / VIP'],['publicIp','Public IP'],['wafIp','WAF IP'],['port','Port'],['protocol','Protocol'],['environment','Environment'],['notes','Notes']],
-  LoadBalancers: [['name','Server name'],['hostIp','Host IP'],['hostPort','Host Port'],['hostProtocol','Host Protocol'],['vip','LB VIP'],['port','VIP Port'],['vipProtocol','VIP Protocol'],['pool','LB VIP BE / Pool'],['publishType','Publishing type'],['certificate','Certificate / Content Switching'],['members','Pool Members'],['waf','WAF'],['notes','Notes']],
+  LoadBalancers: [['name','Server name'],['hostIp','Host IP'],['hostPort','Host Port'],['hostProtocol','Host Protocol'],['vip','LB VIP'],['port','VIP Port'],['vipProtocol','VIP Protocol'],['pool','LB VIP BE / Pool'],['publishType','Publishing type'],['certificate','Certificate / Content Switching'],['dns','DNS URL'],['members','Pool Members'],['waf','WAF'],['notes','Notes']],
   Connections: [['type','Connection type'],['sourceIp','Source IP'],['sourceHost','Source Hostname'],['destinationIp','Destination IP'],['destinationHost','Destination Hostname'],['protocol','TCP / UDP'],['port','Port'],['duration','Temp / Perm'],['reference','Request reference'],['notes','Notes']],
   Networks: [['name','Subnet name'],['ipam','IPAM'],['range','IP Range'],['vlan','VLAN ID'],['subnet','Subnet'],['gateway','Gateway'],['context','Context'],['notes','Notes']]
 };
@@ -46,7 +47,7 @@ function field(key,label,v,scope,index,type='text'){
  const id=`${scope}-${index}-${key}`,attrs=`id="${id}" data-scope="${scope}" data-index="${index}" data-key="${key}"`,options=key==='gsnDirection'?['ELM → Partner (ELM is Consumer)','Partner → ELM (ELM is Publisher)']:key==='vpnType'?['Site-to-site IPsec','Remote access','Other']:key==='vpnStatus'?['Planned','Configured','Active','Inactive','Under review']:scope==='Connections'&&key==='type'?['Connection','VPN','Firewall','NAT','GSN','MPLS','API']:key==='environment'?['Production','Staging','QA','Dev','Dev/QA','DR']:key==='platform'?['VM','Physical Server']:scope==='Components'&&key==='type'?['OpenShift','Kubernetes','Container','API','Storage']:null;
  const current=String(v||'');let input;
  if(options){const values=[...new Set([...options,...(current?[current]:[])])];input=`<select ${attrs}><option value="">Not specified</option>${values.map(o=>`<option ${o===current?'selected':''}>${esc(o)}</option>`).join('')}</select>`;}
- else if(key==='description'||key==='notes'||scope==='Connections'&&draft.Connections[index]?.type==='GSN'&&['sourceIp','snatIp','destinationIp','elmServer'].includes(key))input=`<textarea ${attrs}>${esc(v)}</textarea>`;
+ else if(key==='description'||key==='notes'||scope==='Connections'&&draft.Connections[index]?.type==='GSN'&&['sourceIp','snatIp','destinationIp','elmServer'].includes(key)||scope==='LoadBalancers'&&['name','hostIp','dns','members'].includes(key))input=`<textarea ${attrs}>${esc(v)}</textarea>`;
  else input=`<input ${attrs} type="${type}" value="${esc(v)}" ${scope==='service'&&key==='name'?'required':''}>`;
  return `<div class="field ${key==='description'||key==='notes'?'wide':''}"><label for="${id}">${label}${scope==='service'&&key==='name'?' *':''}</label>${input}</div>`;
 }
@@ -85,3 +86,5 @@ window.addEventListener('themechange',()=>{if(!document.querySelector('#backdrop
 
 // Switch connection-specific fields immediately without discarding the draft.
 document.addEventListener('change',e=>{const x=e.target;if(!draft||x.dataset.scope!=='Connections'||x.dataset.key!=='type')return;draft.Connections[Number(x.dataset.index)].type=x.value;editSection='Connections';const scroll=document.querySelector('.modal-body')?.scrollTop||0;rerenderModal();const next=document.getElementById(x.id);next?.focus({preventScroll:true});document.querySelector('.modal-body').scrollTop=scroll;});
+
+initServiceImport(id=>services.find(r=>r.service.id===id),async result=>{workspace.tab='infrastructure';workspace.query='';workspace.environment='';await refresh();document.querySelector('#load-balancer-records')?.scrollIntoView({block:'start'});notify(`${result.added} load balancer rows imported; ${result.skipped} duplicates skipped.`);});

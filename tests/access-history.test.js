@@ -1,3 +1,4 @@
+import ExcelJS from 'exceljs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -23,7 +24,7 @@ const record=name=>({service:{name,code:'TST'},Servers:[],Components:[],Endpoint
 test('server enforces admin writes and records reliable identity across every mutation area',async()=>{
  try{
  assert.equal((await request('/api/services')).status,200);
- for(const [method,url] of [['POST','/api/tpms'],['POST','/api/services'],['PUT','/api/services/example'],['DELETE','/api/services/example'],['POST','/api/import/preview'],['POST','/api/import/commit'],['POST','/api/references'],['PUT','/api/references/example'],['DELETE','/api/references/example'],['PUT','/api/services/example/architecture'],['POST','/api/users'],['PUT','/api/users/example']]){
+ for(const [method,url] of [['POST','/api/services/example/import/lb/preview'],['POST','/api/services/example/import/lb/commit'],['POST','/api/tpms'],['POST','/api/services'],['PUT','/api/services/example'],['DELETE','/api/services/example'],['POST','/api/import/preview'],['POST','/api/import/commit'],['POST','/api/references'],['PUT','/api/references/example'],['DELETE','/api/references/example'],['PUT','/api/services/example/architecture'],['POST','/api/users'],['PUT','/api/users/example']]){
  assert.equal((await request(url,{method,body:{}})).status,401,url);
  }
  assert.equal((await request('/api/users')).status,401);
@@ -45,6 +46,15 @@ test('server enforces admin writes and records reliable identity across every mu
  const id=created.body.service.id;
  const updated=await request('/api/services/'+id,{method:'PUT',cookie,body:{...created.body,service:{...created.body.service,name:'Renamed'},updatedBy:'Impersonated'}});assert.equal(updated.status,200);assert.equal(updated.body.service.updatedBy,'Admin Person');
  const stale=await request('/api/services/'+id,{method:'PUT',cookie,body:created.body});assert.equal(stale.status,409);
+ const lbRow={name:'app-one',hostIp:'192.0.2.10\n192.0.2.11',hostPort:'8080',hostProtocol:'TCP',vip:'198.51.100.10',vipProtocol:'TCP',port:'443',dns:'https://example.test/',notes:'Imported example'};
+ const lbBook=new ExcelJS.Workbook();lbBook.addWorksheet('LB').addRows([['Host Name','Host IP Address','Host Port','LB / WAF VIP','DNS URL'],[lbRow.name,lbRow.hostIp,lbRow.hostPort,lbRow.vip,lbRow.dns]]);
+ const preview=await fetch(base+'/api/services/'+id+'/import/lb/preview',{method:'POST',headers:{Cookie:cookie,'X-Portal-Request':'1','Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'},body:await lbBook.xlsx.writeBuffer()});assert.equal(preview.status,200);assert.equal((await preview.json()).rows[0].dns,lbRow.dns);
+ assert.equal((await request('/api/services/'+id+'/import/lb/commit',{method:'POST',cookie:viewerCookie,body:{rows:[lbRow],revision:updated.body.service.revision}})).status,403);
+ const lbImport=await request('/api/services/'+id+'/import/lb/commit',{method:'POST',cookie,body:{rows:[lbRow],revision:updated.body.service.revision}});assert.equal(lbImport.status,200);assert.equal(lbImport.body.added,1);
+ const afterImport=(await request('/api/services')).body.find(r=>r.service.id===id);assert.equal(afterImport.service.name,'Renamed');assert.equal(afterImport.LoadBalancers[0].dns,lbRow.dns);assert.equal(afterImport.LoadBalancers[0].hostIp,lbRow.hostIp);
+ assert.equal((await request('/api/services/'+id+'/import/lb/commit',{method:'POST',cookie,body:{rows:[lbRow],revision:updated.body.service.revision}})).status,409);
+ const repeat=await request('/api/services/'+id+'/import/lb/commit',{method:'POST',cookie,body:{rows:[lbRow],revision:afterImport.service.revision}});assert.equal(repeat.body.added,0);assert.equal(repeat.body.skipped,1);
+ const exportResponse=await fetch(base+'/api/export');const exported=new ExcelJS.Workbook();await exported.xlsx.load(Buffer.from(await exportResponse.arrayBuffer()));const sheet=exported.getWorksheet('LoadBalancers');const dnsCol=sheet.getRow(1).values.indexOf('dns');assert.equal(sheet.getRow(2).getCell(dnsCol).text,lbRow.dns);
  const diagram=await request('/api/services/'+id+'/architecture',{method:'PUT',cookie,body:{revision:0,nodes:[{id:'db',label:'DB',type:'Database',x:0,y:0}],edges:[]}});assert.equal(diagram.status,200);
  const reference=await request('/api/references',{method:'POST',cookie,body:{category:'Public IP',name:'Gateway',value:'192.0.2.10',updatedBy:'Fake'}});assert.equal(reference.status,201);assert.equal(reference.body.updatedBy,'Admin Person');
  assert.equal((await request('/api/references/'+reference.body.id,{method:'DELETE',cookie})).status,204);
@@ -54,6 +64,7 @@ test('server enforces admin writes and records reliable identity across every mu
  const history=(await request('/api/history',{cookie})).body;
  assert.ok(history.items.some(e=>e.action==='Updated service'&&e.status==='completed'&&e.changes.some(c=>c.field==='service.name'&&c.before==='Original'&&c.after==='Renamed')));
  assert.ok(history.items.some(e=>e.action==='Updated service'&&e.status==='rejected'));
+ assert.ok(history.items.some(e=>e.action==='Imported load balancer sheet'&&e.status==='completed'&&e.entityId===id));
  for(const kind of ['services','architecture','references','imports','users','tpms'])assert.ok(history.items.some(e=>e.kind===kind&&e.status==='completed'),kind);
  assert.ok(history.items.every(e=>e.actor.username==='admin'));
  assert.ok(!(await request('/api/history',{cookie:viewerCookie})).body.items.some(e=>e.kind==='users'));

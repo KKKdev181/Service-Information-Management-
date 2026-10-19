@@ -12,7 +12,7 @@ const sheets = {
   Components: ['id','serviceId','name','type','environment','site','cluster','namespace','url','role','notes'],
   Servers: ['id', 'serviceId', 'name', 'environment', 'role', 'privateIp', 'publicIp', 'os', 'site', 'domain', 'cpu', 'ram', 'storage', 'notes', 'zone', 'platform'],
   Endpoints: ['id', 'serviceId', 'url', 'dns', 'vip', 'port', 'protocol', 'environment', 'publicIp', 'wafIp', 'notes'],
-  LoadBalancers: ['id', 'serviceId', 'name', 'vip', 'pool', 'members', 'port', 'waf', 'hostIp', 'hostPort', 'hostProtocol', 'vipProtocol', 'publishType', 'certificate', 'notes'],
+  LoadBalancers: ['id', 'serviceId', 'name', 'vip', 'pool', 'members', 'port', 'waf', 'hostIp', 'hostPort', 'hostProtocol', 'vipProtocol', 'publishType', 'certificate', 'notes', 'dns'],
   Connections: ['id', 'serviceId', 'type', 'source', 'destination', 'port', 'reference', 'notes', 'sourceIp', 'sourceHost', 'destinationIp', 'destinationHost', 'protocol', 'duration', 'tunnelName', 'vpnType', 'environment', 'localGateway', 'remoteGateway', 'localSubnets', 'remoteSubnets', 'vpnStatus', 'gsnDirection', 'partnerName', 'snatIp', 'loadBalancer', 'lbPorts', 'elmServer'],
   Networks: ['id', 'serviceId', 'name', 'ipam', 'range', 'vlan', 'subnet', 'gateway', 'context', 'notes']
 };

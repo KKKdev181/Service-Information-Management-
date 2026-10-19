@@ -1,3 +1,4 @@
+import {mergeLoadBalancers} from './lb-import.js';
 import {identify,mutationGuard,adminOnly,login,logout,listUsers,saveUser} from './access.js';
 import {audited,readHistory} from './history.js';
 import { readArchitecture, saveArchitecture } from './architecture.js';
@@ -43,6 +44,17 @@ app.delete('/api/services/:id', asyncRoute(async (req, res) => { await audited(r
 app.get('/api/services/:id/architecture', asyncRoute(async (req,res)=>{if(!(await list()).some(x=>x.service.id===req.params.id))return res.status(404).json({error:'Service not found'});res.json(await readArchitecture(req.params.id));}));
 app.put('/api/services/:id/architecture', asyncRoute(async (req,res)=>{if(!(await list()).some(x=>x.service.id===req.params.id))return res.status(404).json({error:'Service not found'});res.json(await audited(req.user,{kind:'architecture',action:'Saved architecture',entityId:req.params.id,label:(await serviceBefore(req.params.id)).service.name},()=>readArchitecture(req.params.id),()=>saveArchitecture(req.params.id,req.body),async x=>x));}));
 app.get('/api/export', asyncRoute(async (req, res) => res.download(await workbookPath(), 'service-implementation.xlsx')));
+app.post('/api/services/:id/import/lb/preview',express.raw({type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',limit:'12mb'}),asyncRoute(async(req,res)=>{
+ if(!await serviceBefore(req.params.id))return res.status(404).json({error:'Service not found'});
+ res.json(await previewInWorker(req.body,'','lb'));
+}));
+app.post('/api/services/:id/import/lb/commit',asyncRoute(async(req,res)=>{
+ const current=await serviceBefore(req.params.id);if(!current)return res.status(404).json({error:'Service not found'});
+ if(String(req.body.revision)!==String(current.service.revision))return res.status(409).json({error:'This service changed since the import was opened. Close the import, refresh the page and try again.'});
+ const merged=mergeLoadBalancers(current.LoadBalancers,req.body.rows);
+ if(merged.added)await audited(req.user,{kind:'services',action:'Imported load balancer sheet',entityId:req.params.id,label:current.service.name},()=>serviceBefore(req.params.id),()=>upsert(req.params.id,{...current,LoadBalancers:merged.rows,updatedBy:req.user.name}),async x=>x);
+ res.json({added:merged.added,skipped:merged.skipped});
+}));
 app.post('/api/import/preview', express.raw({ type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', limit: '12mb' }), asyncRoute(async (req, res) => {
   const filename = decodeURIComponent(req.get('X-Import-Filename') || '');
   res.json(await previewInWorker(req.body, filename));
@@ -65,10 +77,10 @@ if(process.env.NODE_ENV!=='test')app.listen(port, host, () => console.log(`Servi
 
 
 // Keep untrusted/heavy Excel parsing out of the web server process.
-function previewInWorker(buffer, filename) {
+function previewInWorker(buffer, filename, mode) {
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL('./import-worker.js', import.meta.url), {
-      workerData: { buffer, filename },
+      workerData: { buffer, filename, mode },
       resourceLimits: { maxOldGenerationSizeMb: 256 }
     });
     let settled = false;
