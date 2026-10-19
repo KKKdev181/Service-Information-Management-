@@ -11,12 +11,12 @@ export async function previewLoadBalancers(buffer){
   let mapping=null;
   for(let r=1;r<=sheet.rowCount;r++){
    const row=sheet.getRow(r),candidate={};
-   row.eachCell((cell,col)=>{const header=normalize(cell.text);for(const [key,names] of Object.entries(aliases))if(names.includes(header))candidate[key]=col;});
+   row.eachCell((cell,col)=>{const header=normalize(cell.text);for(const [key,names] of Object.entries(aliases))if(names.includes(header)||(key==='dns'&&/^dnsurls?(?:in|for|at)/.test(header)))candidate[key]=col;});
    if(candidate.vip&&candidate.hostIp&&candidate.hostPort){mapping=candidate;continue;}
    if(!mapping)continue;
    // A title or recommendation merged across columns is not a mapping row.
    if(row.getCell(mapping.hostIp).master.address===row.getCell(mapping.vip).master.address)continue;
-   const item=Object.fromEntries(lbKeys.map(k=>{const cell=mapping[k]?row.getCell(mapping[k]):null;return [k,String(cell?.hyperlink||cell?.text||'').replace(/\r\n?/g,'\n').trim()];}));
+   const item=Object.fromEntries(lbKeys.map(k=>{const cell=mapping[k]?row.getCell(mapping[k]):null;const text=String(cell?.text||'');const value=k==='dns'&&/https?:\/\//i.test(text)?text:cell?.hyperlink||text;return [k,String(value).replace(/\r\n?/g,'\n').trim()];}));
    if(!item.hostIp&&!item.vip)continue;
    if(!item.hostIp||!item.vip){warnings.push(`${sheet.name}, row ${r}: missing host IP or VIP; row skipped.`);continue;}
    if(Object.values(item).some(v=>v.length>1000))throw invalid(`Row ${r} contains a cell longer than 1,000 characters. Split it into more rows.`);

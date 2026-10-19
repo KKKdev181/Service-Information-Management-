@@ -15,3 +15,13 @@ test('unrecognized workbooks and invalid rows fail without creating empty data',
  const book=new ExcelJS.Workbook();book.addWorksheet('Other').addRow(['Unknown']);await assert.rejects(previewLoadBalancers(await book.xlsx.writeBuffer()),/No load balancer rows/);
  assert.throws(()=>mergeLoadBalancers([], [{hostIp:'192.0.2.1'}]),/host IP and VIP/);
 });
+
+test('DNS URL headers tolerate organization spelling and preserve multiple displayed URLs',async()=>{
+ for(const heading of ['DNS URL In THiqha','DNS URL In Thiqah','DNS URL in Elm','DNS / URL','DNS URL']){
+  const book=new ExcelJS.Workbook(),sheet=book.addWorksheet('LB');sheet.addRow([...headers.slice(0,7),heading,'Note']);sheet.addRow(values);
+  sheet.getCell('H2').value={text:values[7],hyperlink:'https://example.test/'};
+  const result=await previewLoadBalancers(await book.xlsx.writeBuffer());assert.equal(result.rows[0].dns,values[7],heading);
+ }
+ const book=new ExcelJS.Workbook(),sheet=book.addWorksheet('LB');sheet.addRow(headers);sheet.addRow(values);sheet.getCell('H2').value={text:'Open service',hyperlink:'https://example.test/'};
+ assert.equal((await previewLoadBalancers(await book.xlsx.writeBuffer())).rows[0].dns,'https://example.test/');
+});
